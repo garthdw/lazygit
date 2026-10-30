@@ -1,5 +1,22 @@
 # Changelog
 
+## [v0.12.0] - 2026-09-07
+
+This release is based on Go 1.27's gofmt, and requires Go 1.26 or later.
+
+A standard library import carrying a doc or inline comment is no longer moved
+into the top import group, as the comment stayed behind and ended up detached
+at the bottom of the group. See #289.
+
+Moving a standard library import up no longer leaves an empty line where it
+used to be, which split the remaining imports into extra groups. See #225.
+
+A copyright header or package doc no longer makes gofumpt treat a single-line
+first declaration as multi-line, adding an empty line after it.
+
+An assignment whose right-hand side is separated by a comment is now left
+alone, as merging the lines produced output which gofmt would change back.
+
 ## [v0.11.0] - 2026-07-27
 
 Like v0.10.0, this release is based on Go 1.26's gofmt, and requires Go 1.25 or later.
@@ -229,6 +246,7 @@ those building programs with gofumpt.
 Finally, this release adds the `-version` flag, to print the tool's own version.
 The flag will work for "master" builds too.
 
+[v0.12.0]: https://github.com/mvdan/gofumpt/releases/tag/v0.12.0
 [v0.11.0]: https://github.com/mvdan/gofumpt/releases/tag/v0.11.0
 [v0.10.0]: https://github.com/mvdan/gofumpt/releases/tag/v0.10.0
 [v0.9.0]: https://github.com/mvdan/gofumpt/releases/tag/v0.9.0
