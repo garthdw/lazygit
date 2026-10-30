@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/jesseduffield/lazygit/pkg/gui/types"
 	"github.com/jesseduffield/lazygit/pkg/utils"
 	"github.com/samber/lo"
-	"golang.org/x/exp/slices"
 	"gopkg.in/ozeidan/fuzzy-patricia.v3/patricia"
 )
 

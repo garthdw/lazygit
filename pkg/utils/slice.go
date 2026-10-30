@@ -1,6 +1,6 @@
 package utils
 
-import "golang.org/x/exp/slices"
+import "slices"
 
 // NextIndex returns the index of the element that comes after the given number
 func NextIndex(numbers []int, currentNumber int) int {

@@ -3,6 +3,7 @@ package hosting_service
 import (
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/go-errors/errors"
@@ -10,8 +11,6 @@ import (
 	"github.com/jesseduffield/lazygit/pkg/utils"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
-
-	"golang.org/x/exp/slices"
 )
 
 // This package is for handling logic specific to a git hosting service like github, gitlab, bitbucket, gitea, etc.

@@ -2,12 +2,12 @@ package utils
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 
 	"github.com/rivo/uniseg"
 	"github.com/samber/lo"
-	"golang.org/x/exp/slices"
 )
 
 type Alignment int

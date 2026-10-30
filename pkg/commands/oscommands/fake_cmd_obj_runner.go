@@ -3,13 +3,13 @@ package oscommands
 import (
 	"bufio"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/go-errors/errors"
 	"github.com/samber/lo"
-	"golang.org/x/exp/slices"
 )
 
 // for use in testing

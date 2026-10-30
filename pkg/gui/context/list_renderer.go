@@ -2,12 +2,12 @@ package context
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jesseduffield/lazygit/pkg/gui/types"
 	"github.com/jesseduffield/lazygit/pkg/utils"
 	"github.com/samber/lo"
-	"golang.org/x/exp/slices"
 )
 
 func formatListSectionHeader(label string) string {

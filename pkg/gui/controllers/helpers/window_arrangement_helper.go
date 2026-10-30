@@ -4,13 +4,13 @@ import (
 	"fmt"
 	mapsPkg "maps"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/jesseduffield/lazycore/pkg/boxlayout"
 	"github.com/jesseduffield/lazygit/pkg/config"
 	"github.com/jesseduffield/lazygit/pkg/gui/types"
 	"github.com/jesseduffield/lazygit/pkg/utils"
-	"golang.org/x/exp/slices"
 )
 
 // In this file we use the boxlayout package, along with knowledge about the app's state,
