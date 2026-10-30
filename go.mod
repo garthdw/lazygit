@@ -1,6 +1,6 @@
 module github.com/jesseduffield/lazygit
 
-go 1.26.0
+go 1.27.0
 
 // This is necessary to ignore test files when executing gofumpt.
 ignore ./test
