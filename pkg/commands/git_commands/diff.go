@@ -22,7 +22,7 @@ const metadataHandshake = "\x1b]1717"
 // width of zero, and would then never get as far as announcing itself.
 const probeWidth = 80
 
-// ProbeDiffRendererEmitsMetadata reports whether the configured diff renderer states
+// ProbeDiffRendererEmitsMetadata reports whether the given diff renderer states
 // which line of which file it is rendering, by running it on empty input and looking
 // for the handshake. The answer decides whether a diff the renderer produced can be
 // acted on at all, or has to be replaced by git's own when the user wants to act on it
@@ -36,8 +36,7 @@ const probeWidth = 80
 // No terminal is needed. git only invokes a stdin filter when it thinks it is talking
 // to one, but the renderer itself doesn't care: it announces itself whenever OSC1717 is
 // set, so it can be run directly with empty input.
-func (self *DiffCommands) ProbeDiffRendererEmitsMetadata() bool {
-	manager := self.diffRendererConfigManager
+func (self *DiffCommands) ProbeDiffRendererEmitsMetadata(manager *config.DiffRendererConfigManager) bool {
 	values := config.DiffRendererValues{Width: probeWidth, DiffContext: 3}
 
 	switch manager.GetDiffRendererType() {
