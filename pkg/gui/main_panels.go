@@ -24,7 +24,7 @@ func (gui *Gui) runTaskForView(view *gocui.View, task types.UpdateTask) error {
 		return gui.newCmdTask(view, v.Cmd, v.Prefix)
 
 	case *types.RunDiffRendererTask:
-		return gui.newRenderTask(view, v.Cmd, v.Prefix)
+		return gui.newRenderTask(view, v.Cmd, v.Prefix, v.Mode)
 	}
 
 	return nil

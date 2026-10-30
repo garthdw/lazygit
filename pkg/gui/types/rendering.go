@@ -131,6 +131,8 @@ func NewRunCommandTaskWithPrefix(cmd *exec.Cmd, prefix Prefix) *RunCommandTask {
 type RunDiffRendererTask struct {
 	Cmd    *exec.Cmd
 	Prefix Prefix
+	// Which diff renderer the output goes through (see git_commands.DiffMode.DiffRenderer).
+	Mode git_commands.DiffMode
 
 	// contentIsDiff marks output that is a panel's own diff; see ContentIsDiff.
 	contentIsDiff bool
@@ -164,6 +166,7 @@ func NewMainViewDiffTaskWithPrefix(cmd *exec.Cmd, prefix Prefix, mode git_comman
 		return task
 	}
 	task := NewRunDiffRendererTaskWithPrefix(cmd, prefix)
+	task.Mode = mode
 	task.contentIsDiff = true
 	return task
 }

@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/jesseduffield/lazygit/pkg/commands/git_commands"
 	"github.com/jesseduffield/lazygit/pkg/config"
 	"github.com/jesseduffield/lazygit/pkg/gocui"
 	"github.com/jesseduffield/lazygit/pkg/gui/types"
@@ -33,10 +34,10 @@ type renderSpec struct {
 	stdinFilter string
 }
 
-// newRenderTask renders cmd's output into view, through the diff renderer the
-// user has configured. The renderer lays its rendering out to the width of the
+// newRenderTask renders cmd's output into view, through the diff renderer that
+// mode says produces it. The renderer lays its rendering out to the width of the
 // view, which only the layout settles, so the task is created after it.
-func (gui *Gui) newRenderTask(view *gocui.View, cmd *exec.Cmd, prefix types.Prefix) error {
+func (gui *Gui) newRenderTask(view *gocui.View, cmd *exec.Cmd, prefix types.Prefix, mode git_commands.DiffMode) error {
 	// Ask whatever renders the diff to state, in an OSC 1717 record per line,
 	// which line of which file it is rendering. This lets us act on the line the
 	// user is pointing at even when the rendering no longer looks like a diff.
@@ -47,7 +48,7 @@ func (gui *Gui) newRenderTask(view *gocui.View, cmd *exec.Cmd, prefix types.Pref
 	// whose markup we could not otherwise resolve.
 	cmd.Env = append(cmd.Env, "OSC1717=V1")
 
-	if gui.stateAccessor.GetDiffRendererConfigManager().GetDiffRendererType() == config.DiffRendererType_RawGit {
+	if mode.DiffRenderer(gui.stateAccessor.GetDiffRendererConfigManager()).GetDiffRendererType() == config.DiffRendererType_RawGit {
 		// If we're not using a custom diff renderer, then we don't need to use a pty
 		return gui.newCmdTask(view, cmd, prefix)
 	}
@@ -81,7 +82,7 @@ func (gui *Gui) newRenderTask(view *gocui.View, cmd *exec.Cmd, prefix types.Pref
 		// The layout may have changed the size of the view, so only now is the
 		// width to render at known, and with it the renderer command.
 		width := gui.renderWidth(view)
-		diffRendererConfigManager := gui.stateAccessor.GetDiffRendererConfigManager()
+		diffRendererConfigManager := mode.DiffRenderer(gui.stateAccessor.GetDiffRendererConfigManager())
 		values := config.DiffRendererValues{
 			Width:           width,
 			DiffContext:     gui.c.UserConfig().Git.DiffContextSize,

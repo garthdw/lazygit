@@ -143,6 +143,22 @@ func (self *DiffRendererConfigManager) GetRawGitArgs() []string {
 	return currentDiffRendererConfig.Args
 }
 
+// FocusedDiffRenderer returns a manager for the diff renderer that git.focusedDiffRenderer
+// names: the first entry whose display name it is. ok is false when it names none.
+func (self *DiffRendererConfigManager) FocusedDiffRenderer() (*DiffRendererConfigManager, bool) {
+	name := self.getUserConfig().Git.FocusedDiffRenderer
+	if name == "" {
+		return nil, false
+	}
+
+	for i, diffRenderer := range self.getUserConfig().Git.DiffRenderers {
+		if diffRenderer.displayName() == name {
+			return &DiffRendererConfigManager{getUserConfig: self.getUserConfig, diffRendererIndex: i}, true
+		}
+	}
+	return nil, false
+}
+
 func (self *DiffRendererConfigManager) CycleDiffRenderers() {
 	self.diffRendererIndex = (self.diffRendererIndex + 1) % len(self.getUserConfig().Git.DiffRenderers)
 }
