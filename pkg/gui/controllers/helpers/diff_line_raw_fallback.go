@@ -27,7 +27,7 @@ import (
 // focused — after staging a hunk, say — stays with git's own diff rather than flipping
 // back to the renderer's.
 func (self *DiffLineHelper) MainViewDiffMode() git_commands.DiffMode {
-	if self.mainViewIsFocused() && self.diffNeedsMetadata() && !self.diffRendererEmitsMetadata() {
+	if self.mainViewIsFocused() && self.diffNeedsMetadata() && !self.diffRendererEmitsMetadata(self.c.State().GetDiffRendererConfigManager()) {
 		return git_commands.DiffModeRaw
 	}
 	return git_commands.DiffModeRendered
@@ -45,7 +45,7 @@ func (self *DiffLineHelper) MainViewDiffMode() git_commands.DiffMode {
 func (self *DiffLineHelper) DiffRowsCanBePlaced() bool {
 	return !self.diffNeedsMetadata() ||
 		self.MainViewDiffMode() == git_commands.DiffModeRaw ||
-		self.diffRendererEmitsMetadata()
+		self.diffRendererEmitsMetadata(self.c.State().GetDiffRendererConfigManager())
 }
 
 // RenderFocusedMainViewAgain has the panel beneath the focused main view render its
@@ -97,24 +97,23 @@ func (self *DiffLineHelper) diffNeedsMetadata() bool {
 	return len(manager.GetRawGitArgs()) > 0
 }
 
-// diffRendererEmitsMetadata is the probed verdict about the current diff renderer, asked
-// once and remembered until the renderer changes — the user cycling to another one, or a
-// changed config being reloaded.
-func (self *DiffLineHelper) diffRendererEmitsMetadata() bool {
-	signature := self.diffRendererSignature()
-	if self.rendererEmitsMetadata == nil || signature != self.rendererSignature {
-		verdict := self.c.Git().Diff.ProbeDiffRendererEmitsMetadata()
-		self.rendererEmitsMetadata = &verdict
-		self.rendererSignature = signature
+// diffRendererEmitsMetadata is the probed verdict about the given diff renderer, asked
+// once and remembered for as long as the renderer stays the same — until the user cycles
+// to another one, or a changed config is reloaded.
+func (self *DiffLineHelper) diffRendererEmitsMetadata(manager *config.DiffRendererConfigManager) bool {
+	signature := diffRendererSignature(manager)
+	verdict, ok := self.rendererEmitsMetadata[signature]
+	if !ok {
+		verdict = self.c.Git().Diff.ProbeDiffRendererEmitsMetadata(manager)
+		self.rendererEmitsMetadata[signature] = verdict
 	}
-	return *self.rendererEmitsMetadata
+	return verdict
 }
 
-// diffRendererSignature identifies the current diff renderer, so that the remembered
-// verdict is dropped when it stops describing the renderer we have. The values a command
-// is resolved with are no part of its identity, so fixed ones are used.
-func (self *DiffLineHelper) diffRendererSignature() string {
-	manager := self.c.State().GetDiffRendererConfigManager()
+// diffRendererSignature identifies a diff renderer, so that a remembered verdict is only
+// used for the renderer it describes. The values a command is resolved with are no part
+// of its identity, so fixed ones are used.
+func diffRendererSignature(manager *config.DiffRendererConfigManager) string {
 	index, _ := manager.CurrentDiffRendererIndex()
 	values := config.DiffRendererValues{}
 	externalDiff, _ := manager.GetExternalDiffCommand(values)
