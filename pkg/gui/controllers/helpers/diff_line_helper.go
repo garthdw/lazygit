@@ -11,14 +11,13 @@ import (
 type DiffLineHelper struct {
 	c *HelperCommon
 
-	// What the probe said about the diff renderer that rendererSignature names, or nil
-	// before it has been asked about any (see diffRendererEmitsMetadata).
-	rendererEmitsMetadata *bool
-	rendererSignature     string
+	// What the probe said about each diff renderer it has been asked about, by the
+	// renderer's signature (see diffRendererEmitsMetadata).
+	rendererEmitsMetadata map[string]bool
 }
 
 func NewDiffLineHelper(c *HelperCommon) *DiffLineHelper {
-	return &DiffLineHelper{c: c}
+	return &DiffLineHelper{c: c, rendererEmitsMetadata: map[string]bool{}}
 }
 
 // GetDiffLineInfo recovers the identity — file, kind, and old/new line number —
