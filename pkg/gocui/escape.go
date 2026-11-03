@@ -233,15 +233,16 @@ func (ei *escapeInterpreter) emitCursorAdvance(n int) {
 	ei.screenCol = 1
 }
 
-// firstParamOrDefault returns the first CSI parameter parsed as an int,
-// or dflt if it's absent / empty / unparseable.
-func (ei *escapeInterpreter) firstParamOrDefault(dflt int) int {
+// firstParamOrOne returns the first CSI parameter parsed as an int, or 1 (the
+// default of every cursor-movement sequence) if it's absent / empty /
+// unparseable.
+func (ei *escapeInterpreter) firstParamOrOne() int {
 	if len(ei.csiParam) == 0 || ei.csiParam[0] == "" {
-		return dflt
+		return 1
 	}
 	n, err := strconv.Atoi(ei.csiParam[0])
 	if err != nil {
-		return dflt
+		return 1
 	}
 	return n
 }
@@ -386,7 +387,7 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 		case characterEquals(ch, 'H'), characterEquals(ch, 'f'),
 			characterEquals(ch, 'd'):
 			// CUP / HVP (absolute (row, col), col ignored) or VPA (absolute row).
-			targetRow := ei.firstParamOrDefault(1)
+			targetRow := ei.firstParamOrOne()
 			if targetRow <= 1 {
 				// Cursor home. ConPTY emits this (after [2J) at the start of
 				// every screen, so it marks where ConPTY's coordinate origin
@@ -408,7 +409,7 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 			// CUD / CNL — relative row advance by N. CNL also resets
 			// the column, which we don't track, so the two are
 			// equivalent for our purposes.
-			ei.emitCursorAdvance(ei.firstParamOrDefault(1))
+			ei.emitCursorAdvance(ei.firstParamOrOne())
 			ei.state = stateNone
 			ei.csiParam = nil
 			return true, nil
@@ -416,7 +417,7 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 			// CUF — cursor forward N. Emit space cells so the gap
 			// renders. (screenCol is updated by the view via
 			// notifyCellsWritten as those spaces are emitted.)
-			ei.instruction = cursorForward{n: ei.firstParamOrDefault(1)}
+			ei.instruction = cursorForward{n: ei.firstParamOrOne()}
 			ei.state = stateNone
 			ei.csiParam = nil
 			return true, nil
