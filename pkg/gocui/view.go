@@ -1336,6 +1336,14 @@ func (b *viewBuffer) write(v *View, p []byte) int {
 					advanceToNextLine()
 				}
 			}
+			if cu, ok := b.ei.instruction.(cursorUp); ok {
+				b.ei.instructionRead()
+				b.autoRenderHyperlinksInCurrentLine(v)
+				b.lines[b.wy].collectMetadata()
+				b.wy = max(b.wy-cu.n, 0)
+				b.makeWriteable(b.wx, b.wy)
+				top = min(top, b.wy)
+			}
 			if cells == nil {
 				continue
 			}
@@ -1477,6 +1485,17 @@ func (b *viewBuffer) parseInput(v *View, ch []byte, width int, x int, _ int) (bo
 			b.lines[b.wy].trailingFillAttributes = &trailingFillAttributes{
 				fg: b.ei.curFgColor,
 				bg: b.ei.curBgColor,
+			}
+			return truncateLine, cells
+		} else if _, ok := b.ei.instruction.(eraseLine); ok {
+			// The cursor stays where it is, so the line keeps blanks up to it.
+			b.ei.instructionRead()
+			b.lines[b.wy] = lineType{
+				cells: slices.Repeat([]cell{{chr: " ", width: 1, fgColor: b.ei.curFgColor, bgColor: b.ei.curBgColor}}, b.wx),
+				trailingFillAttributes: &trailingFillAttributes{
+					fg: b.ei.curFgColor,
+					bg: b.ei.curBgColor,
+				},
 			}
 			return truncateLine, cells
 		} else if cf, ok := b.ei.instruction.(cursorForward); ok {

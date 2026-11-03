@@ -74,12 +74,24 @@ type eraseInLineFromCursor struct{}
 
 func (self eraseInLineFromCursor) isInstruction() {}
 
+// eraseLine asks the view to blank the whole current line (EL 2).
+type eraseLine struct{}
+
+func (self eraseLine) isInstruction() {}
+
 // cursorDown asks the view to advance N rows. Emitted when CUP / CUD /
-// CNL / VPA targets a row past the current one; backward moves are
+// CNL / VPA targets a row past the current one; backward absolute moves are
 // ignored because the view's buffer is line-based and can't undo.
 type cursorDown struct{ n int }
 
 func (self cursorDown) isInstruction() {}
+
+// cursorUp asks the view to move back N rows (CUU), so that a program
+// redrawing something in place, like a progress spinner, overwrites it. It
+// never reaches above the top of the pseudo-terminal screen.
+type cursorUp struct{ n int }
+
+func (self cursorUp) isInstruction() {}
 
 // cursorForward asks the view to materialize N space cells. Emitted
 // when CUF advances the cursor right — ConPTY uses CUF (often paired
@@ -308,7 +320,7 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 			ei.csiParam = append(ei.csiParam, "0")
 		case characterEquals(ch, 'K'),
 			characterEquals(ch, 'H'), characterEquals(ch, 'f'), characterEquals(ch, 'd'),
-			characterEquals(ch, 'B'), characterEquals(ch, 'E'),
+			characterEquals(ch, 'A'), characterEquals(ch, 'B'), characterEquals(ch, 'E'),
 			characterEquals(ch, 'C'):
 			// fall through — let stateParams handle these with default
 			// params (CUP/VPA default to row 1, CUD/CNL/CUF default to
@@ -374,10 +386,13 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 				}
 			}
 
-			if p == 0 {
+			switch p {
+			case 0:
 				ei.instruction = eraseInLineFromCursor{}
-			} else {
-				// non-zero values of P not supported
+			case 2:
+				ei.instruction = eraseLine{}
+			default:
+				// erasing to the cursor (P = 1) is not supported
 				ei.instruction = noInstruction{}
 			}
 
@@ -401,6 +416,14 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 			} else {
 				// Skip forward to the target row; ignore backward moves.
 				ei.emitCursorAdvance(targetRow - ei.screenRow)
+			}
+			ei.state = stateNone
+			ei.csiParam = nil
+			return true, nil
+		case characterEquals(ch, 'A'):
+			if n := min(ei.firstParamOrOne(), ei.screenRow-1); n > 0 {
+				ei.instruction = cursorUp{n: n}
+				ei.screenRow -= n
 			}
 			ei.state = stateNone
 			ei.csiParam = nil

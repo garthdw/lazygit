@@ -746,6 +746,32 @@ func TestWriteCursorPositionEscapeWithSoftWraps(t *testing.T) {
 	}, got)
 }
 
+func TestWriteSpinnerThatClearsItself(t *testing.T) {
+	// A diff renderer that thinks it writes to a terminal may show a progress
+	// spinner first, redrawing it in place by moving the cursor up and erasing
+	// lines, and erasing it altogether once the diff is ready.
+	v := NewView("name", 0, 0, 30, 30, OutputNormal)
+	frame := "\r\n  tip\x1b[1A\r\x1b[2K\x1b[1B\r\x1b[2K\x1b[1A"
+	v.writeString("- working" + frame)
+	v.writeString("| working" + frame)
+	v.writeString("diff\r\n")
+	v.writeString("+a\r\n")
+	v.writeString("+b\r\n")
+
+	assert.Equal(t, []string{"diff", "+a", "+b"}, lo.Map(v.buf.lines, func(l lineType, _ int) string {
+		return cellsToString(l.cells)
+	}))
+}
+
+func TestWriteCursorUpEscapeStopsAtTheTop(t *testing.T) {
+	v := NewView("name", 0, 0, 30, 30, OutputNormal)
+	v.writeString("a\r\nb\x1b[5A\rc\r\n")
+
+	assert.Equal(t, []string{"c", "b"}, lo.Map(v.buf.lines, func(l lineType, _ int) string {
+		return cellsToString(l.cells)
+	}))
+}
+
 func stringToCells(s string) []cell {
 	var cells []cell
 	state := -1
