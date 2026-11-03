@@ -1246,23 +1246,24 @@ func (v *View) write(p []byte) {
 	}
 
 	v.markViewLinesDirty()
-	// write only ever touches lines from v.buf.wy onwards, so any cached wrapping
-	// below that stays valid.
-	v.firstDirtyLine = min(v.firstDirtyLine, v.buf.wy)
 	v.clearHover()
 
-	v.buf.write(v, p)
+	// write only ever touches lines from the topmost one it returns onwards, so
+	// any cached wrapping above that stays valid.
+	v.firstDirtyLine = min(v.firstDirtyLine, v.buf.write(v, p))
 
 	v.searcher.positionsStale = true
 }
 
-// write parses p into cells and appends them to the buffer at its write cursor.
-// It only touches the buffer; the View wrapper above handles display-side
-// effects (tainting, hover, search). v supplies render config (Editable, colors,
-// width, tab width, hyperlink auto-rendering).
-func (b *viewBuffer) write(v *View, p []byte) {
+// write parses p into cells and appends them to the buffer at its write cursor,
+// returning the topmost line it touched. It only touches the buffer; the View
+// wrapper above handles display-side effects (tainting, hover, search). v
+// supplies render config (Editable, colors, width, tab width, hyperlink
+// auto-rendering).
+func (b *viewBuffer) write(v *View, p []byte) int {
 	// Fill with empty cells, if writing outside current view buffer
 	b.makeWriteable(b.wx, b.wy)
+	top := b.wy
 
 	finishLine := func() {
 		b.autoRenderHyperlinksInCurrentLine(v)
@@ -1361,6 +1362,7 @@ func (b *viewBuffer) write(v *View, p []byte) {
 	} else {
 		b.autoRenderHyperlinksInCurrentLine(v)
 	}
+	return top
 }
 
 // exported functions use the mutex. Non-exported functions are for internal use
