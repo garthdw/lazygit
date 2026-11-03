@@ -163,9 +163,7 @@ func (self *GitCommandBuilder) ParseableDiffPrefixes() *GitCommandBuilder {
 
 func (self *GitCommandBuilder) AddCommonDiffArgs(diffRendererConfigManager *config.DiffRendererConfigManager, userConfig *config.UserConfig, mode DiffMode) *GitCommandBuilder {
 	contextSize := userConfig.Git.DiffContextSize
-	rendered := mode == DiffModeRendered || mode == DiffModeFocused
-	diffRenderer := mode.DiffRenderer(diffRendererConfigManager)
-	useExtDiff := rendered && diffRenderer.GetDiffRendererType() == config.DiffRendererType_ExtDiff
+	useExtDiff := mode == DiffModeRendered && diffRendererConfigManager.GetDiffRendererType() == config.DiffRendererType_ExtDiff
 
 	return self.
 		ArgIfElse(useExtDiff, "--ext-diff", "--no-ext-diff").
@@ -177,7 +175,7 @@ func (self *GitCommandBuilder) AddCommonDiffArgs(diffRendererConfigManager *conf
 		Arg(fmt.Sprintf("--find-renames=%d%%", userConfig.Git.RenameSimilarityThreshold)).
 		// The renderer's own arguments to git — a word diff, say — are part of the
 		// rendering, so they go with it.
-		ArgIf(rendered, diffRenderer.GetRawGitArgs()...)
+		ArgIf(mode == DiffModeRendered, diffRendererConfigManager.GetRawGitArgs()...)
 }
 
 func (self *GitCommandBuilder) ToArgv() []string {

@@ -394,6 +394,7 @@ var tests = []*components.IntegrationTest{
 	main_view.CopySelectedDiffLines,
 	main_view.CustomPatchGoesThroughTheDiffRenderer,
 	main_view.CustomPatchIgnoresLineEndingConversion,
+	main_view.CycleDiffRenderersUnderTheFocusedDiffRenderer,
 	main_view.DiscardAllChanges,
 	main_view.DiscardDiffLines,
 	main_view.DiscardFromACommitOnlyWhereItCanBeRewritten,

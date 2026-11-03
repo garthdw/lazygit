@@ -21,37 +21,50 @@ import (
 // otherwise. Browsing keeps the renderer's version; only acting on it needs one we can
 // follow.
 
+// SwitchToFocusedDiffRenderer makes git.focusedDiffRenderer the current renderer, as the
+// main view takes focus, when the renderer being browsed with can't be acted on and that
+// one can. It is only the renderer the focused main view starts with: the user can cycle
+// on from it, and leaving the main view goes back to the one they were browsing with
+// unless they did. It reports whether it switched.
+func (self *DiffLineHelper) SwitchToFocusedDiffRenderer() bool {
+	manager := self.c.State().GetDiffRendererConfigManager()
+	if !self.diffNeedsMetadata() || self.diffRendererEmitsMetadata(manager) {
+		return false
+	}
+	focused, ok := manager.FocusedDiffRenderer()
+	if !ok || !self.diffRendererEmitsMetadata(focused) {
+		return false
+	}
+	manager.SwitchToFocusedDiffRenderer(focused)
+	return true
+}
+
 // MainViewDiffMode says how a side panel should produce the diff it renders into the
-// main view: as the user configured it, or — while the main view holds focus and what
-// the renderer would produce couldn't be acted on — by the focused diff renderer or as
-// git's own.
+// main view: as the user configured it, or as git's own — while the main view holds
+// focus and what the renderer would produce couldn't be acted on.
 //
 // Every panel that renders a diff into the main view asks, so that a re-render while
-// focused — after staging a hunk, say — stays with the diff that can be acted on rather
-// than flipping back to the renderer's.
+// focused — after staging a hunk, say — stays with git's own diff rather than flipping
+// back to the renderer's.
 func (self *DiffLineHelper) MainViewDiffMode() git_commands.DiffMode {
-	manager := self.c.State().GetDiffRendererConfigManager()
-	if !self.mainViewIsFocused() || !self.diffNeedsMetadata() || self.diffRendererEmitsMetadata(manager) {
-		return git_commands.DiffModeRendered
+	if self.mainViewIsFocused() && self.diffNeedsMetadata() && !self.diffRendererEmitsMetadata(self.c.State().GetDiffRendererConfigManager()) {
+		return git_commands.DiffModeRaw
 	}
-	if focused, ok := manager.FocusedDiffRenderer(); ok && self.diffRendererEmitsMetadata(focused) {
-		return git_commands.DiffModeFocused
-	}
-	return git_commands.DiffModeRaw
+	return git_commands.DiffModeRendered
 }
 
 // DiffRowsCanBePlaced reports whether the rows of the diff the main view is about to be
-// given can be placed in the file they show. git's own diff describes itself, and the
-// focused diff renderer states records for its rows; either is what MainViewDiffMode
-// substitutes for a rendering that can't be acted on. Any other rendering says where its
-// rows belong only if it states records for them.
+// given can be placed in the file they show. git's own diff describes itself, whether it
+// is what the user configured or what MainViewDiffMode is about to substitute for a
+// rendering that can't be acted on; any other rendering says where its rows belong only
+// if it states records for them.
 //
 // It is what anything that means to go from a row back to the file it shows has to ask
 // first: with neither records nor a diff that describes itself, there is nothing to go
 // on, and offering the user the way there would be offering nothing.
 func (self *DiffLineHelper) DiffRowsCanBePlaced() bool {
 	return !self.diffNeedsMetadata() ||
-		self.MainViewDiffMode() != git_commands.DiffModeRendered ||
+		self.MainViewDiffMode() == git_commands.DiffModeRaw ||
 		self.diffRendererEmitsMetadata(self.c.State().GetDiffRendererConfigManager())
 }
 

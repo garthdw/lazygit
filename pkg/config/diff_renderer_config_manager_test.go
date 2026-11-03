@@ -345,3 +345,38 @@ func TestFocusedDiffRendererIsPinnedToItsEntry(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "difft --color=always", command, "the cycled renderer is unaffected")
 }
+
+func TestSwitchToFocusedDiffRenderer(t *testing.T) {
+	userConfig := &UserConfig{}
+	userConfig.Git.DiffRenderers = []DiffRendererConfig{
+		{Name: "difft", Type: "extDiff", Command: "difft"},
+		{Name: "delta", Command: "delta"},
+		{Name: "git", Type: "rawGit"},
+	}
+	userConfig.Git.FocusedDiffRenderer = "delta"
+	config := NewDiffRendererConfigManager(func() *UserConfig { return userConfig })
+	focused, _ := config.FocusedDiffRenderer()
+	currentIndex := func() int {
+		index, _ := config.CurrentDiffRendererIndex()
+		return index
+	}
+
+	config.RestoreBrowsingDiffRenderer()
+	assert.Equal(t, 0, currentIndex(), "nothing to restore without a switch")
+
+	config.SwitchToFocusedDiffRenderer(focused)
+	assert.Equal(t, 1, currentIndex())
+	config.RestoreBrowsingDiffRenderer()
+	assert.Equal(t, 0, currentIndex())
+
+	config.SwitchToFocusedDiffRenderer(focused)
+	config.CycleDiffRenderers()
+	config.RestoreBrowsingDiffRenderer()
+	assert.Equal(t, 2, currentIndex(), "a cycle after the switch is kept")
+
+	config.CycleDiffRenderers()
+	config.SwitchToFocusedDiffRenderer(focused)
+	config.CycleDiffRenderersBackward()
+	config.RestoreBrowsingDiffRenderer()
+	assert.Equal(t, 0, currentIndex(), "a reverse cycle after the switch is kept")
+}

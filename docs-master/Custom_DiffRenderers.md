@@ -57,7 +57,7 @@ git:
 
 To stage, edit or copy lines from a diff in the focused main view, lazygit has to know which line of which file each row shows. A renderer that lays the diff out its own way, like difftastic, can only tell it that by speaking the OSC 1717 protocol; when the renderer you are browsing with doesn't, lazygit shows git's own diff while the main view is focused.
 
-If you'd rather stage under a renderer of your own that does speak the protocol, name it in `focusedDiffRenderer`. It is used only while the main view is focused and the renderer you are browsing with can't be acted on; leaving the main view brings the browsing renderer back, and `|` keeps cycling the browsing renderer. For example, to browse with difftastic and stage with delta:
+If you'd rather stage under a renderer of your own that does speak the protocol, name it in `focusedDiffRenderer`. Focusing the main view switches to it when the renderer you are browsing with can't be acted on, and leaving the main view switches back. It is only where the focused main view starts: `|` still cycles from there, and if you cycle while focused, the renderer you cycled to is kept when you leave. For example, to browse with difftastic and stage with delta:
 
 ```yaml
 git:
