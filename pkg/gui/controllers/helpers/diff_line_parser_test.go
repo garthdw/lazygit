@@ -418,6 +418,15 @@ func TestParseDiffLineMetadata(t *testing.T) {
 		// it in anyway is taken at its word rather than rejected.
 		{"file header with a line number", "1;f;10;;foo.txt", parsedDiffLine{Path: "foo.txt", Type: types.DiffLineFileHeader, NewLine: 10}, true},
 
+		// A span stands for every change line within its ranges: additions by the
+		// new file's lines, deletions by the old file's. Either side may be empty.
+		{"span", "1;e;4-8;3-6;foo.txt", parsedDiffLine{Path: "foo.txt", Type: types.DiffLineSpan, NewLine: 4, NewEnd: 8, OldLine: 3, OldEnd: 6}, true},
+		{"span of an added entity", "1;e;4-8;;foo.txt", parsedDiffLine{Path: "foo.txt", Type: types.DiffLineSpan, NewLine: 4, NewEnd: 8}, true},
+		{"span of a deleted entity", "1;e;;3-6;foo.txt", parsedDiffLine{Path: "foo.txt", Type: types.DiffLineSpan, OldLine: 3, OldEnd: 6}, true},
+		{"span of nothing", "1;e;;;foo.txt", parsedDiffLine{}, false},
+		{"span without an end", "1;e;4;;foo.txt", parsedDiffLine{}, false},
+		{"span ending before it starts", "1;e;8-4;;foo.txt", parsedDiffLine{}, false},
+
 		{"unknown version", "2;c;1;;foo.txt", parsedDiffLine{}, false},
 		{"unknown type", "1;x;1;;foo.txt", parsedDiffLine{}, false},
 		{"too few fields", "1;c;1", parsedDiffLine{}, false},

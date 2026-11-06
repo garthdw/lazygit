@@ -14,6 +14,10 @@ const (
 	// DiffLineOther is anything that isn't one of the above, e.g. the
 	// "\ No newline at end of file" marker.
 	DiffLineOther
+	// DiffLineSpan is a row standing for a group of change lines, such as a whole
+	// function, as the ranges NewLine–NewEnd (additions) and OldLine–OldEnd
+	// (deletions) state.
+	DiffLineSpan
 )
 
 // DiffLineInfo is the identity of a row of a rendered diff in terms of the patch
@@ -34,6 +38,9 @@ type DiffLineInfo struct {
 	// for deletions, which are the only rows that need it: two consecutive
 	// deletions share a new-file position and differ only here.
 	OldLine int
+	// NewEnd and OldEnd end a span's ranges; 0 where the span has no such side.
+	NewEnd int
+	OldEnd int
 }
 
 // IsChange reports whether the row is an added or deleted line, as opposed to a
@@ -51,6 +58,23 @@ func (self DiffLineInfo) PatchLineIdentity() patch.LineIdentity {
 		return patch.LineIdentity{LineNumber: self.OldLine, IsDeletion: true}
 	}
 	return patch.LineIdentity{LineNumber: self.NewLine}
+}
+
+// PatchLineIdentities says which change lines of the file the row stands for: a change
+// row's own, or a span's additions and deletions.
+func (self DiffLineInfo) PatchLineIdentities() []patch.LineIdentity {
+	if self.Type != DiffLineSpan {
+		return []patch.LineIdentity{self.PatchLineIdentity()}
+	}
+	identities := []patch.LineIdentity{}
+	if self.NewEnd > 0 {
+		identities = append(identities, patch.LineIdentity{LineNumber: self.NewLine, LastLineNumber: self.NewEnd})
+	}
+	if self.OldEnd > 0 {
+		identities = append(identities,
+			patch.LineIdentity{LineNumber: self.OldLine, LastLineNumber: self.OldEnd, IsDeletion: true})
+	}
+	return identities
 }
 
 // IsContent reports whether the row is a line of the file itself — a change or a
