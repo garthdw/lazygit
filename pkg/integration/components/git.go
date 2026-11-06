@@ -41,6 +41,15 @@ func (self *Git) RemoteTagNames(remote string, expectedNames []string) *Git {
 	})
 }
 
+// IndexContent asserts what the index holds for path, give or take surrounding
+// whitespace.
+func (self *Git) IndexContent(path string, expected string) *Git {
+	expected = strings.TrimSpace(expected)
+	return self.expect([]string{"git", "show", ":" + path}, func(actual string) (bool, string) {
+		return actual == expected, fmt.Sprintf("Expected the index to hold\n%s\nfor %s, but it holds\n%s", expected, path, actual)
+	})
+}
+
 func (self *Git) assert(cmdArgs []string, expected string) *Git {
 	self.expect(cmdArgs, func(output string) (bool, string) {
 		return output == expected, fmt.Sprintf("Expected current branch name to be '%s', but got '%s'", expected, output)

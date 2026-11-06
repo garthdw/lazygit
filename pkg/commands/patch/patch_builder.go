@@ -408,6 +408,10 @@ func (p *PatchBuilder) GetFileStatus(filename string, parent string) PatchStatus
 type LineIdentity struct {
 	LineNumber int
 	IsDeletion bool
+	// LastLineNumber, when set, makes this a span: every change line of its kind
+	// from LineNumber through LastLineNumber. A renderer states one for a row that
+	// stands for a group of lines, such as a whole function.
+	LastLineNumber int
 }
 
 // ChangeLineIndexByIdentity indexes a parsed diff's change lines by their identity. An
@@ -420,23 +424,28 @@ func ChangeLineIndexByIdentity(parsed *Patch) map[LineIdentity]int {
 	for idx, line := range parsed.Lines() {
 		switch {
 		case line.IsAddition():
-			byIdentity[LineIdentity{newLineNumbers[idx], false}] = idx
+			byIdentity[LineIdentity{LineNumber: newLineNumbers[idx]}] = idx
 		case line.IsDeletion():
-			byIdentity[LineIdentity{oldLineNumbers[idx], true}] = idx
+			byIdentity[LineIdentity{LineNumber: oldLineNumbers[idx], IsDeletion: true}] = idx
 		}
 	}
 	return byIdentity
 }
 
 // ChangeLineIndicesForLines maps the given change lines of a parsed diff to their
-// indices in it. A line that names no change line of the diff — a context line, or a
-// line that isn't in the diff at all — contributes nothing.
+// indices in it, each once. A line that names no change line of the diff — a context
+// line, or a line that isn't in the diff at all — contributes nothing.
 func ChangeLineIndicesForLines(parsed *Patch, lines []LineIdentity) []int {
 	byIdentity := ChangeLineIndexByIdentity(parsed)
 	indices := make([]int, 0, len(lines))
+	seen := set.New[int]()
 	for _, line := range lines {
-		if idx, ok := byIdentity[line]; ok {
-			indices = append(indices, idx)
+		for n := line.LineNumber; n <= max(line.LineNumber, line.LastLineNumber); n++ {
+			idx, ok := byIdentity[LineIdentity{LineNumber: n, IsDeletion: line.IsDeletion}]
+			if ok && !seen.Includes(idx) {
+				seen.Add(idx)
+				indices = append(indices, idx)
+			}
 		}
 	}
 	return indices
@@ -455,10 +464,8 @@ func (p *PatchBuilder) PatchLineIndicesForLines(
 	}
 
 	parsed := Parse(info.diff)
-	selected := set.NewFromSlice(lines)
-	everyChange = lo.EveryBy(maps.Keys(ChangeLineIndexByIdentity(parsed)),
-		func(identity LineIdentity) bool { return selected.Includes(identity) })
-	return ChangeLineIndicesForLines(parsed, lines), everyChange, nil
+	indices = ChangeLineIndicesForLines(parsed, lines)
+	return indices, len(indices) == len(ChangeLineIndexByIdentity(parsed)), nil
 }
 
 // IncludedLineIdentities says which change lines of filename are in the patch, as the

@@ -41,6 +41,8 @@ type parsedDiffLine struct {
 	Type    types.DiffLineType
 	NewLine int
 	OldLine int
+	NewEnd  int
+	OldEnd  int
 }
 
 // bufferLineParse is the parser's result for one buffer line: the recovered
@@ -428,12 +430,19 @@ func stripDiffPathPrefix(path string) string {
 // empty unless the line is a deletion, the only kind that needs it, and the
 // new-file line is empty on a file header, the one kind that has no line.
 //
+// A span ('e') states ranges instead, as start-end, either of which may be empty:
+//
+//	1;e;new-start-new-end;old-start-old-end;file
+//
 // ok is false for a payload of an unknown version or shape, so that the caller
 // can fall back to reading the rendered text.
 func parseDiffLineMetadata(payload string) (parsedDiffLine, bool) {
 	fields := strings.SplitN(payload, ";", 5)
 	if len(fields) < 5 || fields[0] != "1" {
 		return parsedDiffLine{}, false
+	}
+	if fields[1] == "e" {
+		return parseSpanMetadata(fields)
 	}
 
 	lineType, ok := diffLineTypeFromMetadata(fields[1])
@@ -460,6 +469,28 @@ func parseDiffLineMetadata(payload string) (parsedDiffLine, bool) {
 	}
 
 	return parsedDiffLine{Path: fields[4], Type: lineType, NewLine: newLine, OldLine: oldLine}, true
+}
+
+// parseSpanMetadata parses the fields of an 'e' record (see parseDiffLineMetadata).
+func parseSpanMetadata(fields []string) (parsedDiffLine, bool) {
+	parseRange := func(field string) (start int, end int, ok bool) {
+		if field == "" {
+			return 0, 0, true
+		}
+		startText, endText, found := strings.Cut(field, "-")
+		start, startErr := strconv.Atoi(startText)
+		end, endErr := strconv.Atoi(endText)
+		return start, end, found && startErr == nil && endErr == nil && 0 < start && start <= end
+	}
+	newLine, newEnd, newOk := parseRange(fields[2])
+	oldLine, oldEnd, oldOk := parseRange(fields[3])
+	if !newOk || !oldOk || newEnd+oldEnd == 0 {
+		return parsedDiffLine{}, false
+	}
+	return parsedDiffLine{
+		Path: fields[4], Type: types.DiffLineSpan,
+		NewLine: newLine, NewEnd: newEnd, OldLine: oldLine, OldEnd: oldEnd,
+	}, true
 }
 
 func diffLineTypeFromMetadata(typeField string) (types.DiffLineType, bool) {

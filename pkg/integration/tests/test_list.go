@@ -568,6 +568,7 @@ var tests = []*components.IntegrationTest{
 	main_view.StagePartialBlockOfChangesLastLines,
 	main_view.StagePartialBlockOfChangesMiddleLines,
 	main_view.StageRangeSpanningFiles,
+	main_view.StageASpanOfLines,
 	main_view.StageUnderConformingDiffRenderer,
 	main_view.StageUnderUnsupportedDiffRenderer,
 	main_view.StartPatchFromAnotherCommit,

@@ -123,12 +123,13 @@ func repoPathOfTreePath(path string, treesDir string, worktreePath string) strin
 }
 
 // ChangeLinesInBufferRange returns the change lines — the additions and deletions —
-// among the diff lines shown by the rows in the inclusive buffer-line range. Those are
+// among the diff lines shown by the rows in the inclusive buffer-line range, plus the
+// spans standing for groups of them (see types.DiffLineSpan). Those are
 // the lines a patch is built from: a patch carries whatever context it needs around
 // them by itself, so a selection contributes only its changes.
 func (self *DiffLineHelper) ChangeLinesInBufferRange(view *gocui.View, first int, last int) []types.DiffLineInfo {
 	return lo.Filter(self.DiffLinesInBufferRange(view, first, last),
-		func(info types.DiffLineInfo, _ int) bool { return info.IsChange() })
+		func(info types.DiffLineInfo, _ int) bool { return info.IsChange() || info.Type == types.DiffLineSpan })
 }
 
 // changeLines resolves view's rendered diff to one flag per buffer line: whether

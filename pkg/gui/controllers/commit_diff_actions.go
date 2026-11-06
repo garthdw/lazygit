@@ -371,7 +371,7 @@ func (self *CommitDiffActions) selectionByFile(lines []types.DiffLineInfo) (comm
 		if _, seen := selection.linesByPath[path]; !seen {
 			selection.paths = append(selection.paths, path)
 		}
-		selection.linesByPath[path] = append(selection.linesByPath[path], line.PatchLineIdentity())
+		selection.linesByPath[path] = append(selection.linesByPath[path], line.PatchLineIdentities()...)
 	}
 	return selection, nil
 }

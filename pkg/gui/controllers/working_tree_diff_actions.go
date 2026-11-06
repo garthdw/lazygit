@@ -134,7 +134,7 @@ func (self *WorkingTreeDiffActions) EditHunk(
 
 	parsedPatch := patch.Parse(self.c.Git().WorkingTree.WorktreeFileDiff(file, git_commands.DiffModePlain, onStagedSide))
 	lineIndices := patch.ChangeLineIndicesForLines(parsedPatch,
-		[]patch.LineIdentity{linesByFile[0].lines[0].PatchLineIdentity()})
+		linesByFile[0].lines[0].PatchLineIdentities())
 	if len(lineIndices) == 0 {
 		return diffLinesNotFoundError(self.c, file.GetPath())
 	}
@@ -338,8 +338,8 @@ func (self *WorkingTreeDiffActions) buildDiffLinesPatch(
 	parsedPatch := patch.Parse(self.c.Git().WorkingTree.WorktreeFileDiff(file, git_commands.DiffModePlain, sourceCached))
 
 	patchLineIndices := patch.ChangeLineIndicesForLines(parsedPatch,
-		lo.Map(infos, func(info types.DiffLineInfo, _ int) patch.LineIdentity {
-			return info.PatchLineIdentity()
+		lo.FlatMap(infos, func(info types.DiffLineInfo, _ int) []patch.LineIdentity {
+			return info.PatchLineIdentities()
 		}))
 	if len(patchLineIndices) == 0 {
 		return diffLinesPatch{}, diffLinesNotFoundError(self.c, file.GetPath())
