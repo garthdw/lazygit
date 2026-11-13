@@ -952,3 +952,69 @@ func TestAdjustLineNumber(t *testing.T) {
 		})
 	}
 }
+
+// A span stands for a deletion and the addition replacing it, wherever they sit in a
+// change block. Selecting them applies them as one unit, with the deletions the span
+// leaves out kept as context.
+func TestTransformSelectedPairOfAChangeBlock(t *testing.T) {
+	diff := `diff --git a/filename b/filename
+index 0000000..1111111 100644
+--- a/filename
++++ b/filename
+@@ -1,5 +1,6 @@
+ head
+-old1
+-old2
+-old3
++new1
++new2
++new3
++new4
+ tail
+`
+	// Indices in the parsed diff: old1..old3 are 6..8 and new1..new4 are 9..12.
+	scenarios := []struct {
+		testName string
+		included []int
+		expected string
+	}{
+		{
+			testName: "first pair",
+			included: []int{6, 9},
+			expected: `--- a/filename
++++ b/filename
+@@ -1,5 +1,5 @@
+ head
+-old1
++new1
+ old2
+ old3
+ tail
+`,
+		},
+		{
+			testName: "middle pair",
+			included: []int{7, 10},
+			expected: `--- a/filename
++++ b/filename
+@@ -1,5 +1,5 @@
+ head
+ old1
+-old2
++new2
+ old3
+ tail
+`,
+		},
+	}
+
+	for _, s := range scenarios {
+		t.Run(s.testName, func(t *testing.T) {
+			result := Parse(diff).
+				Transform(TransformOpts{FileNameOverride: "filename", IncludedLineIndices: s.included}).
+				FormatPlain()
+
+			assert.Equal(t, s.expected, result)
+		})
+	}
+}
