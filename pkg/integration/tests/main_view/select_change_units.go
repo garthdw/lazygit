@@ -64,5 +64,6 @@ var SelectChangeUnits = NewIntegrationTest(NewIntegrationTestArgs{
 			SelectedLines(Contains("-nine"), Contains("+NINE"))
 
 		t.Git().IndexContent("file1", "one\ntwo\nthree\nFOUR\nfive\nsix\nseven\neight\nnine\nten\n")
+		t.FileSystem().FileContent("../entity-calls", Equals("file1::fn::early;1|2|false|file1|\n"))
 	},
 })
