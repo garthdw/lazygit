@@ -268,6 +268,7 @@ func (self *WorkingTreeDiffActions) StageByEntity(
 
 	onStagedSide := self.showsStagedSide(pane)
 	acted := set.New[string]()
+	warnings := []string{}
 	self.c.LogAction(self.c.Tr.Actions.ApplyPatch)
 	for _, target := range targets {
 		file := self.fileForDiffLinePath(target.path)
@@ -284,10 +285,11 @@ func (self *WorkingTreeDiffActions) StageByEntity(
 		if onStagedSide {
 			values.OldPath = file.GetPreviousPath()
 		}
-		patchText, err := self.entityPatch(values)
+		patchText, patchWarnings, err := self.entityPatch(values)
 		if err != nil {
 			return err
 		}
+		warnings = append(warnings, patchWarnings...)
 
 		// A patch of every change the file has on this side is the file staged (or
 		// unstaged) as a whole, which is not the same as applying its diff: a new or
@@ -314,18 +316,26 @@ func (self *WorkingTreeDiffActions) StageByEntity(
 	// The patch went to the index, so the other side has it now.
 	self.revealSelectionInPaneItLandsIn(pane, firstBufferLine, actedSideRemains, true)
 	self.c.RefreshBlockingInput(types.RefreshOptions{Scope: []types.RefreshableView{types.FILES}})
+	if len(warnings) > 0 {
+		self.c.Toast(strings.Join(lo.Uniq(warnings), "\n"))
+	}
 	return nil
 }
 
+// entityPatchWarningPrefix starts each line the entityPatchCommand writes to stderr, on
+// success, to warn about what it has put together; other lines are not warnings.
+const entityPatchWarningPrefix = "warning: "
+
 // entityPatch runs the current diff renderer's entityPatchCommand and returns the patch
-// it prints. A command that fails is reported with what it says about it.
-func (self *WorkingTreeDiffActions) entityPatch(values config.EntityPatchValues) (string, error) {
+// it prints, and the warnings it gave with it. A command that fails is reported with
+// what it says about it.
+func (self *WorkingTreeDiffActions) entityPatch(values config.EntityPatchValues) (string, []string, error) {
 	command, err := self.c.State().GetDiffRendererConfigManager().GetEntityPatchCommand(values, self.c.OS().Quote)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if command == "" {
-		return "", errors.New(self.c.Tr.NoEntityPatchCommand)
+		return "", nil, errors.New(self.c.Tr.NoEntityPatchCommand)
 	}
 
 	stdout, stderr, err := self.c.OS().Cmd.NewShell(command, "").RunWithOutputs()
@@ -334,10 +344,13 @@ func (self *WorkingTreeDiffActions) entityPatch(values config.EntityPatchValues)
 		if reason == "" {
 			reason = err.Error()
 		}
-		return "", errors.New(utils.ResolvePlaceholderString(self.c.Tr.EntityPatchCommandFailed,
+		return "", nil, errors.New(utils.ResolvePlaceholderString(self.c.Tr.EntityPatchCommandFailed,
 			map[string]string{"error": reason}))
 	}
-	return stdout, nil
+	warnings := lo.FilterMap(strings.Split(stderr, "\n"), func(line string, _ int) (string, bool) {
+		return strings.CutPrefix(strings.TrimSpace(line), entityPatchWarningPrefix)
+	})
+	return stdout, warnings, nil
 }
 
 // PatchInclusion is nil: a custom patch is built from a commit's diff, never from the
