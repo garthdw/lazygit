@@ -31,7 +31,7 @@ var NoConsumersWithoutACommand = NewIntegrationTest(NewIntegrationTestArgs{
 			Cancel()
 
 		t.Views().Main().
-			SelectedLines(Contains("-three")).
+			SelectedLines(Contains("-three"), Contains("+THREE")).
 			Press(keys.Main.ShowConsumers)
 		t.ExpectToast(Contains("The diff renderer has no consumersCommand"))
 	},
