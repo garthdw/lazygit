@@ -87,6 +87,43 @@ The command is run by a shell, so the text values are quoted for you; don't put 
 | `{{units}}` | The unit numbers, separated by spaces; empty to stage the whole entity |
 | `{{staged}}`, `{{reverse}}` | True when unstaging (both are the same), false when staging |
 
+## Showing the consumers of an entity
+
+A renderer that says which entity each row belongs to (see above) can also be asked what depends on it, with `consumersCommand`. It must print JSON, described below, on stdout. A failing command (non-zero exit) is reported to the user with the first line of its error output. The command is run in the repo's root, and the consumers popup is disabled, with that as the reason, for renderers that don't have one.
+
+```yaml
+git:
+  diffRenderers:
+    - command: semdiff --pager --color=always --width={{width}}
+      colorArg: never
+      consumersCommand: semdiff impact --entity {{entity}} --depth {{depth}} --json
+```
+
+The command is run by a shell, so the text values are quoted for you; don't put quotes around them. The values are:
+
+| Value | Meaning |
+| --- | --- |
+| `{{entity}}` | The entity id of the selected row, decoded |
+| `{{path}}` | The file of the selected row, relative to the repo root |
+| `{{depth}}` | How many steps of dependents to list: 1 when the popup opens, then 2, then 0 for all of them, as `d` cycles them |
+
+The JSON has these fields; any others are ignored:
+
+```
+{ "schemaVersion": 1,
+  "entity": { "name", "breadcrumb": [...] },
+  "basis": "graph" | "textual",
+  "complete": true | false,
+  "incompleteReasons": [ { "detail" } ],
+  "dependents": [ { "breadcrumb": [...], "file", "line", "depth" } ],
+  "tests": [ { "breadcrumb": [...], "file", "line" } ],
+  "possibleCallers": [ { "name", "file", "line", "sites": [ { "kind", "line" } ] } ] }
+```
+
+Each `breadcrumb` starts with the file, which the popup leaves out. A `basis` of `textual` says that the dependents were found by name rather than by what the code refers to, and the popup says it is approximate. When `complete` is false, the `possibleCallers` are listed under a heading of their own: they may or may not be consumers. `file` is relative to the repo root and `line` is 1-based.
+
+The popup is opened with `showConsumers` (default `i`) in the focused main view, on a row that has an `s` record. `enter` opens the file of the selected row in the editor at its line, like `edit` does, and `d` lists the dependents of another depth.
+
 ## Delta:
 
 ```yaml

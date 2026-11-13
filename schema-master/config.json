@@ -364,6 +364,10 @@
         "entityPatchCommand": {
           "type": "string",
           "description": "The command that prints the patch for staging (or unstaging) an entity or change unit that this renderer shows, for renderers that say which entity and unit each row belongs to (an OSC 1717 's' record). Its output is applied to the index with `git apply --cached`. Without it, the entity and unit staging commands are disabled for this renderer.\nIt is a template; see https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md#staging-entities for the values it can refer to."
+        },
+        "consumersCommand": {
+          "type": "string",
+          "description": "The command that prints the consumers of an entity that this renderer shows, as JSON, for the consumers popup. Without it, the popup is disabled for this renderer.\nIt is a template; see https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md#showing-the-consumers-of-an-entity for the values it can refer to and for the JSON."
         }
       },
       "additionalProperties": false,
@@ -376,7 +380,7 @@
             "$ref": "#/$defs/DiffRendererConfig"
           },
           "type": "array",
-          "description": "Array of diff renderers. Each entry has the following format:\n\n  # The type of diff renderer. One of: 'stdinFilter' (default) | 'extDiff'\n  # | 'rawGit'\n  type: \"stdinFilter\"\n\n  # A name for the diff renderer, shown in the notification when cycling\n  # renderers. If not set, the name is derived from the first word of the\n  # renderer command.\n  name: \"\"\n\n  # Value of the --color arg in the git diff command. Only used for type\n  # 'stdinFilter'. Some renderers want this to be set to 'always' and some\n  # want it set to 'never'.\n  colorArg: \"always\"\n\n  # The command to use for rendering diffs. This is either a stdinFilter or\n  # an external diff command, depending on the type field; not applicable if\n  # the type is 'rawGit'.\n  # e.g.\n  # diff-so-fancy\n  # delta --dark --paging=never\n  # ydiff -p cat\n  # difft --color=always\n  command: \"\"\n\n  # Extra arguments (array of strings) passed to the git command. Only\n  # applicable if the type is 'rawGit'.\n  args: []\n\n  # The command that prints the patch for staging or unstaging an entity\n  # or change unit that this renderer shows, for renderers that say which\n  # entity and unit each row belongs to (an OSC 1717 's' record). Its\n  # output is applied to the index with `git apply --cached`. Without it,\n  # the entity and unit staging commands are disabled for this renderer.\n  # It is a template; see the documentation linked below for the values\n  # it can refer to.\n  entityPatchCommand: \"\"\n\nSee https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md for more information."
+          "description": "Array of diff renderers. Each entry has the following format:\n\n  # The type of diff renderer. One of: 'stdinFilter' (default) | 'extDiff'\n  # | 'rawGit'\n  type: \"stdinFilter\"\n\n  # A name for the diff renderer, shown in the notification when cycling\n  # renderers. If not set, the name is derived from the first word of the\n  # renderer command.\n  name: \"\"\n\n  # Value of the --color arg in the git diff command. Only used for type\n  # 'stdinFilter'. Some renderers want this to be set to 'always' and some\n  # want it set to 'never'.\n  colorArg: \"always\"\n\n  # The command to use for rendering diffs. This is either a stdinFilter or\n  # an external diff command, depending on the type field; not applicable if\n  # the type is 'rawGit'.\n  # e.g.\n  # diff-so-fancy\n  # delta --dark --paging=never\n  # ydiff -p cat\n  # difft --color=always\n  command: \"\"\n\n  # Extra arguments (array of strings) passed to the git command. Only\n  # applicable if the type is 'rawGit'.\n  args: []\n\n  # The command that prints the patch for staging or unstaging an entity\n  # or change unit that this renderer shows, for renderers that say which\n  # entity and unit each row belongs to (an OSC 1717 's' record). Its\n  # output is applied to the index with `git apply --cached`. Without it,\n  # the entity and unit staging commands are disabled for this renderer.\n  # It is a template; see the documentation linked below for the values\n  # it can refer to.\n  entityPatchCommand: \"\"\n\n  # The command that prints the consumers of an entity that this renderer\n  # shows, as JSON, for the consumers popup. Without it, the popup is\n  # disabled for this renderer. It is a template; see the documentation\n  # linked below for the values it can refer to and for the JSON.\n  consumersCommand: \"\"\n\nSee https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md for more information."
         },
         "commit": {
           "$ref": "#/$defs/CommitConfig",
@@ -2572,6 +2576,20 @@
             }
           ],
           "default": "u"
+        },
+        "showConsumers": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "i"
         }
       },
       "additionalProperties": false,
