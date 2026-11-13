@@ -246,3 +246,137 @@ func TestCycleDiffRenderers(t *testing.T) {
 	config.CycleDiffRenderersBackward()
 	assert.Equal(t, 1, currentIndex())
 }
+
+func TestFocusedDiffRenderer(t *testing.T) {
+	diffRenderers := []DiffRendererConfig{
+		{Type: "extDiff", Command: "difft --color=always"},
+		{Name: "delta side-by-side", Command: "delta --side-by-side"},
+		{Command: "delta --dark"},
+		{Type: "rawGit", Args: []string{"--color-words"}},
+		{Name: "twin", Command: "first"},
+		{Name: "twin", Command: "second"},
+	}
+
+	scenarios := []struct {
+		name                string
+		focusedDiffRenderer string
+		expectedOk          bool
+		expectedIndex       int
+	}{
+		{
+			name:                "none is configured",
+			focusedDiffRenderer: "",
+			expectedOk:          false,
+		},
+		{
+			name:                "no entry has the name",
+			focusedDiffRenderer: "nope",
+			expectedOk:          false,
+		},
+		{
+			name:                "matched by its explicit name",
+			focusedDiffRenderer: "delta side-by-side",
+			expectedOk:          true,
+			expectedIndex:       1,
+		},
+		{
+			name:                "an unnamed entry is matched by the first word of its command",
+			focusedDiffRenderer: "delta",
+			expectedOk:          true,
+			expectedIndex:       2,
+		},
+		{
+			name:                "a rawGit entry is matched by its first argument",
+			focusedDiffRenderer: "--color-words",
+			expectedOk:          true,
+			expectedIndex:       3,
+		},
+		{
+			name:                "the first of several entries with the name is used",
+			focusedDiffRenderer: "twin",
+			expectedOk:          true,
+			expectedIndex:       4,
+		},
+	}
+
+	for _, s := range scenarios {
+		t.Run(s.name, func(t *testing.T) {
+			userConfig := &UserConfig{}
+			userConfig.Git.DiffRenderers = diffRenderers
+			userConfig.Git.FocusedDiffRenderer = s.focusedDiffRenderer
+			config := NewDiffRendererConfigManager(func() *UserConfig { return userConfig })
+
+			focused, ok := config.FocusedDiffRenderer()
+			assert.Equal(t, s.expectedOk, ok)
+			if ok {
+				index, _ := focused.CurrentDiffRendererIndex()
+				assert.Equal(t, s.expectedIndex, index)
+			}
+		})
+	}
+}
+
+func TestFocusedDiffRendererIsPinnedToItsEntry(t *testing.T) {
+	userConfig := &UserConfig{}
+	userConfig.Git.DiffRenderers = []DiffRendererConfig{
+		{Type: "extDiff", Command: "difft --color=always"},
+		{Command: "delta --dark"},
+	}
+	userConfig.Git.FocusedDiffRenderer = "delta"
+	config := NewDiffRendererConfigManager(func() *UserConfig { return userConfig })
+
+	focused, ok := config.FocusedDiffRenderer()
+	assert.True(t, ok)
+
+	values := DiffRendererValues{}
+	assertFocusedIsDelta := func() {
+		assert.Equal(t, DiffRendererType_StdinFilter, focused.GetDiffRendererType())
+		command, err := focused.GetStdinFilterCommand(values)
+		assert.NoError(t, err)
+		assert.Equal(t, "delta --dark", command)
+	}
+
+	assertFocusedIsDelta()
+
+	config.CycleDiffRenderers()
+	config.CycleDiffRenderers()
+	assertFocusedIsDelta()
+	command, err := config.GetExternalDiffCommand(values)
+	assert.NoError(t, err)
+	assert.Equal(t, "difft --color=always", command, "the cycled renderer is unaffected")
+}
+
+func TestSwitchToFocusedDiffRenderer(t *testing.T) {
+	userConfig := &UserConfig{}
+	userConfig.Git.DiffRenderers = []DiffRendererConfig{
+		{Name: "difft", Type: "extDiff", Command: "difft"},
+		{Name: "delta", Command: "delta"},
+		{Name: "git", Type: "rawGit"},
+	}
+	userConfig.Git.FocusedDiffRenderer = "delta"
+	config := NewDiffRendererConfigManager(func() *UserConfig { return userConfig })
+	focused, _ := config.FocusedDiffRenderer()
+	currentIndex := func() int {
+		index, _ := config.CurrentDiffRendererIndex()
+		return index
+	}
+
+	config.RestoreBrowsingDiffRenderer()
+	assert.Equal(t, 0, currentIndex(), "nothing to restore without a switch")
+
+	config.SwitchToFocusedDiffRenderer(focused)
+	assert.Equal(t, 1, currentIndex())
+	config.RestoreBrowsingDiffRenderer()
+	assert.Equal(t, 0, currentIndex())
+
+	config.SwitchToFocusedDiffRenderer(focused)
+	config.CycleDiffRenderers()
+	config.RestoreBrowsingDiffRenderer()
+	assert.Equal(t, 2, currentIndex(), "a cycle after the switch is kept")
+
+	config.CycleDiffRenderers()
+	config.SwitchToFocusedDiffRenderer(focused)
+	config.CycleDiffRenderersBackward()
+	config.RestoreBrowsingDiffRenderer()
+	assert.Equal(t, 0, currentIndex(), "a reverse cycle after the switch is kept")
+}

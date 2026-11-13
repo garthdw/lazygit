@@ -11,13 +11,33 @@ import (
 	"github.com/jesseduffield/lazygit/pkg/tasks"
 )
 
-// Falling back to git's own diff when the configured one can't be acted on.
+// Falling back to another diff when the configured one can't be acted on.
 //
 // A diff renderer is free to lay a diff out however it likes, and once it has, we can
 // only tell which line of which file a row shows if the renderer says so. A renderer
 // that doesn't produces a diff that can be read but not staged, edited or copied from,
-// so when the user focuses the main view to act on it, we show git's own diff instead.
-// Browsing keeps the renderer's version; only acting on it needs one we can follow.
+// so when the user focuses the main view to act on it, we show another diff instead:
+// the one git.focusedDiffRenderer renders, if that renderer does say so, and git's own
+// otherwise. Browsing keeps the renderer's version; only acting on it needs one we can
+// follow.
+
+// SwitchToFocusedDiffRenderer makes git.focusedDiffRenderer the current renderer, as the
+// main view takes focus, when the renderer being browsed with can't be acted on and that
+// one can. It is only the renderer the focused main view starts with: the user can cycle
+// on from it, and leaving the main view goes back to the one they were browsing with
+// unless they did. It reports whether it switched.
+func (self *DiffLineHelper) SwitchToFocusedDiffRenderer() bool {
+	manager := self.c.State().GetDiffRendererConfigManager()
+	if !self.diffNeedsMetadata() || self.diffRendererEmitsMetadata(manager) {
+		return false
+	}
+	focused, ok := manager.FocusedDiffRenderer()
+	if !ok || !self.diffRendererEmitsMetadata(focused) {
+		return false
+	}
+	manager.SwitchToFocusedDiffRenderer(focused)
+	return true
+}
 
 // MainViewDiffMode says how a side panel should produce the diff it renders into the
 // main view: as the user configured it, or as git's own — while the main view holds
@@ -27,7 +47,7 @@ import (
 // focused — after staging a hunk, say — stays with git's own diff rather than flipping
 // back to the renderer's.
 func (self *DiffLineHelper) MainViewDiffMode() git_commands.DiffMode {
-	if self.mainViewIsFocused() && self.diffNeedsMetadata() && !self.diffRendererEmitsMetadata() {
+	if self.mainViewIsFocused() && self.diffNeedsMetadata() && !self.diffRendererEmitsMetadata(self.c.State().GetDiffRendererConfigManager()) {
 		return git_commands.DiffModeRaw
 	}
 	return git_commands.DiffModeRendered
@@ -45,22 +65,23 @@ func (self *DiffLineHelper) MainViewDiffMode() git_commands.DiffMode {
 func (self *DiffLineHelper) DiffRowsCanBePlaced() bool {
 	return !self.diffNeedsMetadata() ||
 		self.MainViewDiffMode() == git_commands.DiffModeRaw ||
-		self.diffRendererEmitsMetadata()
+		self.diffRendererEmitsMetadata(self.c.State().GetDiffRendererConfigManager())
 }
 
 // RenderFocusedMainViewAgain has the panel beneath the focused main view render its
-// diff again — which, the main view now holding focus, is git's own diff rather than
-// the renderer's — and calls place once that is on screen.
+// diff again — which, the main view now holding focus, is the focused renderer's or
+// git's own rather than the browsing renderer's — and calls place once that is on
+// screen.
 //
 // The whole diff is read before it is shown, rather than the first screenful: place
 // looks at what is there to decide where to put the selection, and a change line
 // further down would otherwise be missed.
 //
 // It is the same diff of the same files, so the view keeps the scroll position it has
-// rather than starting from the top: git lays the changes out its own way and the line
-// the user was on is somewhere else now, but the offset still puts them among the same
-// part of the file — and the selection is then established from what that leaves on
-// screen.
+// rather than starting from the top: the new rendering lays the changes out its own way
+// and the line the user was on is somewhere else now, but the offset still puts them
+// among the same part of the file — and the selection is then established from what
+// that leaves on screen.
 func (self *DiffLineHelper) RenderFocusedMainViewAgain(view *gocui.View, sidePanel types.Context, place func()) {
 	manager := self.c.GetOrCreateViewBufferManagerForView(view)
 	if manager == nil {
@@ -97,24 +118,23 @@ func (self *DiffLineHelper) diffNeedsMetadata() bool {
 	return len(manager.GetRawGitArgs()) > 0
 }
 
-// diffRendererEmitsMetadata is the probed verdict about the current diff renderer, asked
-// once and remembered until the renderer changes — the user cycling to another one, or a
-// changed config being reloaded.
-func (self *DiffLineHelper) diffRendererEmitsMetadata() bool {
-	signature := self.diffRendererSignature()
-	if self.rendererEmitsMetadata == nil || signature != self.rendererSignature {
-		verdict := self.c.Git().Diff.ProbeDiffRendererEmitsMetadata()
-		self.rendererEmitsMetadata = &verdict
-		self.rendererSignature = signature
+// diffRendererEmitsMetadata is the probed verdict about the given diff renderer, asked
+// once and remembered for as long as the renderer stays the same — until the user cycles
+// to another one, or a changed config is reloaded.
+func (self *DiffLineHelper) diffRendererEmitsMetadata(manager *config.DiffRendererConfigManager) bool {
+	signature := diffRendererSignature(manager)
+	verdict, ok := self.rendererEmitsMetadata[signature]
+	if !ok {
+		verdict = self.c.Git().Diff.ProbeDiffRendererEmitsMetadata(manager)
+		self.rendererEmitsMetadata[signature] = verdict
 	}
-	return *self.rendererEmitsMetadata
+	return verdict
 }
 
-// diffRendererSignature identifies the current diff renderer, so that the remembered
-// verdict is dropped when it stops describing the renderer we have. The values a command
-// is resolved with are no part of its identity, so fixed ones are used.
-func (self *DiffLineHelper) diffRendererSignature() string {
-	manager := self.c.State().GetDiffRendererConfigManager()
+// diffRendererSignature identifies a diff renderer, so that a remembered verdict is only
+// used for the renderer it describes. The values a command is resolved with are no part
+// of its identity, so fixed ones are used.
+func diffRendererSignature(manager *config.DiffRendererConfigManager) string {
 	index, _ := manager.CurrentDiffRendererIndex()
 	values := config.DiffRendererValues{}
 	externalDiff, _ := manager.GetExternalDiffCommand(values)

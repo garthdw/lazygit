@@ -433,6 +433,18 @@ git:
   # for more information.
   diffRenderers: []
 
+  # The name of an entry of diffRenderers to render a diff with while the main
+  # view is focused for staging, when the renderer you are browsing with doesn't
+  # say which line of which file each row shows. An entry is named by its `name`,
+  # or failing that, by the first word of its command (or its first argument, for
+  # 'rawGit').
+  # It has to be a renderer that does say so (one that speaks the OSC 1717
+  # protocol, such as delta); if it isn't, or no entry has that name, git's own
+  # diff is shown instead, as it is when this is empty.
+  # See https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md#staging-with-another-renderer
+  # for more information.
+  focusedDiffRenderer: ""
+
   # Config relating to committing
   commit:
     # If true, pass '--signoff' flag when committing

@@ -98,10 +98,11 @@ func focusMainViewPane(c *ControllerCommon, source types.Context, mainViewContex
 
 	// The diff on screen was produced for reading, and the renderer that produced it may
 	// have laid it out in a way that says nothing about which line of which file each row
-	// is. Now that the user wants to act on it, it is re-rendered as git's own diff — the
-	// panel below decides that for itself, from the same question — and the selection
+	// is. Now that the user wants to act on it, it is re-rendered by the focused diff
+	// renderer, or as git's own diff when there is none that can be acted on — the panel
+	// below decides the latter for itself, from the same question — and the selection
 	// goes on that instead of on rows we can't place.
-	if c.Helpers().DiffLine.MainViewDiffMode() == git_commands.DiffModeRaw {
+	if c.Helpers().DiffLine.SwitchToFocusedDiffRenderer() || c.Helpers().DiffLine.MainViewDiffMode() == git_commands.DiffModeRaw {
 		c.Helpers().DiffLine.RenderFocusedMainViewAgain(mainViewContext.GetView(), source, func() {
 			c.Helpers().DiffLine.EstablishSelection(mainViewContext, clickedLineIdx)
 		})

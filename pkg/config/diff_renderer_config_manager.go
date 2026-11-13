@@ -12,6 +12,10 @@ import (
 type DiffRendererConfigManager struct {
 	getUserConfig     func() *UserConfig
 	diffRendererIndex int
+	// browsingDiffRendererIndex is the renderer to go back to once the main view loses
+	// focus, when focusing it switched to the focused diff renderer and the user hasn't
+	// cycled since; nil otherwise.
+	browsingDiffRendererIndex *int
 }
 
 type DiffRendererType int
@@ -143,11 +147,46 @@ func (self *DiffRendererConfigManager) GetRawGitArgs() []string {
 	return currentDiffRendererConfig.Args
 }
 
+// FocusedDiffRenderer returns a manager for the diff renderer that git.focusedDiffRenderer
+// names: the first entry whose display name it is. ok is false when it names none.
+func (self *DiffRendererConfigManager) FocusedDiffRenderer() (*DiffRendererConfigManager, bool) {
+	name := self.getUserConfig().Git.FocusedDiffRenderer
+	if name == "" {
+		return nil, false
+	}
+
+	for i, diffRenderer := range self.getUserConfig().Git.DiffRenderers {
+		if diffRenderer.displayName() == name {
+			return &DiffRendererConfigManager{getUserConfig: self.getUserConfig, diffRendererIndex: i}, true
+		}
+	}
+	return nil, false
+}
+
+// SwitchToFocusedDiffRenderer makes focused, as FocusedDiffRenderer returned it, the
+// current renderer until RestoreBrowsingDiffRenderer, unless the user cycles before then.
+func (self *DiffRendererConfigManager) SwitchToFocusedDiffRenderer(focused *DiffRendererConfigManager) {
+	browsing := self.diffRendererIndex
+	self.browsingDiffRendererIndex = &browsing
+	self.diffRendererIndex = focused.diffRendererIndex
+}
+
+// RestoreBrowsingDiffRenderer undoes SwitchToFocusedDiffRenderer, if the user hasn't
+// cycled since.
+func (self *DiffRendererConfigManager) RestoreBrowsingDiffRenderer() {
+	if self.browsingDiffRendererIndex != nil {
+		self.diffRendererIndex = *self.browsingDiffRendererIndex
+		self.browsingDiffRendererIndex = nil
+	}
+}
+
 func (self *DiffRendererConfigManager) CycleDiffRenderers() {
+	self.browsingDiffRendererIndex = nil
 	self.diffRendererIndex = (self.diffRendererIndex + 1) % len(self.getUserConfig().Git.DiffRenderers)
 }
 
 func (self *DiffRendererConfigManager) CycleDiffRenderersBackward() {
+	self.browsingDiffRendererIndex = nil
 	n := len(self.getUserConfig().Git.DiffRenderers)
 	self.diffRendererIndex = (self.diffRendererIndex - 1 + n) % n
 }

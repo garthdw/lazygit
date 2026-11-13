@@ -711,8 +711,14 @@ func (self *MainViewController) onDragRelease(gocui.ViewMouseBindingOpts) error 
 // GetOnFocusLost stops an autoscroll that is still running when the view loses focus
 // mid-drag, e.g. because a popup appeared, and gives up the mouse capture with it —
 // otherwise the pointer would keep driving a view that no longer has focus.
+//
+// Leaving for anything but the other main pane also brings back the diff renderer that
+// focusing the main view switched away from.
 func (self *MainViewController) GetOnFocusLost() func(types.OnFocusLostOpts) {
-	return func(types.OnFocusLostOpts) {
+	return func(opts types.OnFocusLostOpts) {
+		if opts.NewContextKey != self.c.Contexts().Normal.GetKey() && opts.NewContextKey != self.c.Contexts().NormalSecondary.GetKey() {
+			self.c.State().GetDiffRendererConfigManager().RestoreBrowsingDiffRenderer()
+		}
 		self.dragAutoscroller.Cancel()
 		if self.draggingWithMouse {
 			self.draggingWithMouse = false
