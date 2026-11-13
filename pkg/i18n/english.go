@@ -1588,7 +1588,7 @@ func EnglishTranslationSet() *TranslationSet {
 		SelectModeLine:                       "Selecting lines",
 		SelectModeUnit:                       "Selecting change units",
 		SelectModeEntity:                     "Selecting entities",
-		ToggleSelectHunkTooltip:              "Toggle line-by-line vs. hunk selection mode.",
+		ToggleSelectHunkTooltip:              "Toggle line-by-line vs. hunk selection mode. Under diff renderers that state entities, it steps through line, unit and entity selection instead.",
 		ToggleSelectionForPatch:              `Toggle lines in patch`,
 		RemoveSelectionFromPatch:             `Remove lines from commit`,
 		RemoveSelectionFromPatchTooltip:      "Remove the selected lines from this commit. This runs an interactive rebase in the background, so you may get a merge conflict if a later commit also changes these lines.",

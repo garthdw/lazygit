@@ -75,7 +75,7 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | Key | Action | Info |
 |-----|--------|-------------|
 | `` <tab> `` | Switch diff pane | Switch to the other focused diff pane. |
-| `` a `` | Toggle hunk selection | Toggle line-by-line vs. hunk selection mode. |
+| `` a `` | Toggle hunk selection | Toggle line-by-line vs. hunk selection mode. Under diff renderers that state entities, it steps through line, unit and entity selection instead. |
 | `` v `` | Переключить выборку перетаскивания |  |
 | `` e `` | Редактировать файл | Open file in external editor. |
 | `` <space> `` | Переключить индекс | Переключить строку в проиндексированные / непроиндексированные |
@@ -104,7 +104,7 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | `` <mouse wheel down> (fn+up) `` | Прокрутить вниз |  |
 | `` <mouse wheel up> (fn+down) `` | Прокрутить вверх |  |
 | `` <tab> `` | Switch diff pane | Switch to the other focused diff pane. |
-| `` a `` | Toggle hunk selection | Toggle line-by-line vs. hunk selection mode. |
+| `` a `` | Toggle hunk selection | Toggle line-by-line vs. hunk selection mode. Under diff renderers that state entities, it steps through line, unit and entity selection instead. |
 | `` v `` | Переключить выборку перетаскивания |  |
 | `` e `` | Редактировать файл | Open file in external editor. |
 | `` <space> `` | Переключить индекс | Переключить строку в проиндексированные / непроиндексированные |
