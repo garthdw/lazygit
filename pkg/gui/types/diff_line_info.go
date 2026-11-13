@@ -41,6 +41,11 @@ type DiffLineInfo struct {
 	// NewEnd and OldEnd end a span's ranges; 0 where the span has no such side.
 	NewEnd int
 	OldEnd int
+	// EntityID is the id of the entity (a function, a class) the renderer says the row
+	// belongs to, empty when it says nothing. Unit is the 1-based change unit of that
+	// entity the row is in, 0 for a row outside every unit, such as the entity's header.
+	EntityID string
+	Unit     int
 }
 
 // IsChange reports whether the row is an added or deleted line, as opposed to a
