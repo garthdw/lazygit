@@ -25,4 +25,10 @@ type DiffSelectState struct {
 	// Whether hunk mode was turned on by the user rather than being the configured
 	// default. This decides whether escape leaves hunk mode or leaves the view.
 	UserEnabledHunkMode bool
+	// Whether hunk mode, where the renderer states entities, selects whole entities
+	// rather than change units. Only read in hunk mode and in a range grown from it.
+	BlocksByEntity bool
+	// Whether the range being selected grows a block at a time, as it does from hunk
+	// mode, rather than a line.
+	RangeByBlock bool
 }

@@ -62,14 +62,9 @@ func (self *MainViewController) GetKeybindings(opts types.KeybindingsOpts) []*ty
 			DisplayOnScreen: true,
 		},
 		{
-			Keys:    opts.GetKeys(opts.Config.Main.ToggleSelectHunk),
-			Handler: self.toggleSelectHunk,
-			DescriptionFunc: self.diffSelectionDescription(func() string {
-				if self.diffSelectState().Mode == types.DiffSelectModeHunk {
-					return self.c.Tr.SelectLineByLine
-				}
-				return self.c.Tr.SelectHunk
-			}),
+			Keys:              opts.GetKeys(opts.Config.Main.ToggleSelectHunk),
+			Handler:           self.toggleSelectHunk,
+			DescriptionFunc:   self.diffSelectionDescription(self.selectModeDescription),
 			Description:       self.c.Tr.ToggleSelectHunk,
 			GetDisabledReason: self.diffSelectionDisabledReason,
 			Tooltip:           self.c.Tr.ToggleSelectHunkTooltip,
@@ -328,11 +323,29 @@ func (self *MainViewController) togglePanel() error {
 	// NextInStack only finds while our context is still the focused main view, so
 	// read it before pushing the other pane.
 	isDiff := self.isDiffView()
+	leaving := *self.diffSelectState()
 	self.c.Context().Push(self.otherContext, types.OnFocusOpts{})
 	if isDiff {
 		self.c.Helpers().DiffLine.EstablishSelection(self.otherContext, -1)
+		self.carryHunkModeOver(leaving)
 	}
 	return nil
+}
+
+// carryHunkModeOver keeps the hunk mode the user chose in the pane being left, in the
+// pane switched to, so that stepping between the two halves of a diff does not undo it. Its
+// entity granularity only carries over where the renderer states entities there too;
+// failing that it is the unit or hunk that does.
+func (self *MainViewController) carryHunkModeOver(leaving types.DiffSelectState) {
+	view := self.otherContext.GetView()
+	if leaving.Mode != types.DiffSelectModeHunk || !leaving.UserEnabledHunkMode || !view.Highlight {
+		return
+	}
+	sel := self.otherContext.DiffSelectState()
+	sel.Mode = types.DiffSelectModeHunk
+	sel.UserEnabledHunkMode = true
+	sel.BlocksByEntity = leaving.BlocksByEntity && self.c.Helpers().DiffLine.HasEntityRecords(view)
+	self.c.Helpers().DiffLine.SelectChangeBlock(self.otherContext, view.SelectedLineIdx(), false)
 }
 
 // escape dismisses the selection a step at a time before leaving the view: a range
@@ -758,6 +771,7 @@ func (self *MainViewController) onDragInFocusedView(opts gocui.ViewMouseBindingO
 	sel := self.diffSelectState()
 	sel.Mode = types.DiffSelectModeRange
 	sel.RangeIsSticky = false
+	sel.RangeByBlock = false
 	sel.UserEnabledHunkMode = false
 	view.SetRangeSelectStart(self.context.DragAnchorViewLine())
 
@@ -848,7 +862,7 @@ func (self *MainViewController) selectClickedDiffLine(viewLine int) {
 	// there, even when this click selects a whole hunk.
 	self.context.SetDragAnchorViewLine(viewLine)
 	if self.diffSelectState().Mode == types.DiffSelectModeHunk {
-		if start, end, ok := self.c.Helpers().DiffLine.SelectedHunkBounds(view); ok &&
+		if start, end, ok := self.c.Helpers().DiffLine.SelectedHunkBounds(view, self.diffSelectState().BlocksByEntity); ok &&
 			viewLine >= start && viewLine <= end {
 			self.context.ResetDiffSelectMode()
 			self.c.Helpers().DiffLine.ShowSelectionAtLine(view, viewLine, false)
@@ -912,13 +926,22 @@ func (self *MainViewController) navigate(find findDiffRowFn, forward bool, align
 type findDiffRowFn func(view *gocui.View, anchorViewLine int, forward bool) (int, bool)
 
 func (self *MainViewController) nextChangeBlock() error {
-	self.navigate(self.c.Helpers().DiffLine.AdjacentChangeBlock, true, false)
+	self.navigate(self.adjacentChangeBlock(), true, false)
 	return nil
 }
 
 func (self *MainViewController) prevChangeBlock() error {
-	self.navigate(self.c.Helpers().DiffLine.AdjacentChangeBlock, false, false)
+	self.navigate(self.adjacentChangeBlock(), false, false)
 	return nil
+}
+
+// adjacentChangeBlock finds the neighbouring block of the kind the selection is in: an
+// entity in hunk mode that selects entities, otherwise a change unit or hunk.
+func (self *MainViewController) adjacentChangeBlock() findDiffRowFn {
+	byEntity := self.diffSelectState().Mode == types.DiffSelectModeHunk && self.diffSelectState().BlocksByEntity
+	return func(view *gocui.View, anchorViewLine int, forward bool) (int, bool) {
+		return self.c.Helpers().DiffLine.AdjacentChangeBlock(view, anchorViewLine, forward, byEntity)
+	}
 }
 
 // nextFile and prevFile bring the file they go to to the top of the view, since what
@@ -983,7 +1006,7 @@ func (self *MainViewController) adjustSelection(delta int) {
 		return
 	}
 	if self.diffSelectState().Mode == types.DiffSelectModeHunk && (delta == 1 || delta == -1) {
-		self.navigate(self.c.Helpers().DiffLine.AdjacentChangeBlock, delta > 0, false)
+		self.navigate(self.adjacentChangeBlock(), delta > 0, false)
 		return
 	}
 	self.collapseForLineMove()
@@ -1008,23 +1031,51 @@ func (self *MainViewController) selectingRange() bool {
 	return self.diffSelectState().RangeIsSticky || start != end
 }
 
-// toggleSelectHunk switches between selecting the change block around the cursor and
-// a single line.
+// toggleSelectHunk steps the selection through its modes: a single line, then the change
+// block around the cursor — a change unit where the renderer states them — and then,
+// there, the whole entity.
 func (self *MainViewController) toggleSelectHunk() error {
 	v := self.context.GetView()
 	if !v.Highlight {
 		return nil
 	}
 	sel := self.diffSelectState()
-	if sel.Mode == types.DiffSelectModeHunk {
-		sel.Mode = types.DiffSelectModeLine
-		v.CancelRangeSelect()
-	} else {
+	hasEntities := self.c.Helpers().DiffLine.HasEntityRecords(v)
+	switch {
+	case sel.Mode != types.DiffSelectModeHunk:
 		sel.Mode = types.DiffSelectModeHunk
 		sel.UserEnabledHunkMode = true
+		sel.BlocksByEntity = false
 		self.selectHunkAround(v.SelectedLineIdx(), true)
+	case hasEntities && !sel.BlocksByEntity:
+		sel.UserEnabledHunkMode = true
+		sel.BlocksByEntity = true
+		self.selectHunkAround(v.SelectedLineIdx(), true)
+	default:
+		sel.Mode = types.DiffSelectModeLine
+		sel.BlocksByEntity = false
+		v.CancelRangeSelect()
 	}
 	return nil
+}
+
+// selectModeDescription says which way the selection is made, where the renderer states
+// entities and so there are more ways than line and hunk.
+func (self *MainViewController) selectModeDescription() string {
+	if !self.c.Helpers().DiffLine.HasEntityRecords(self.context.GetView()) {
+		if self.diffSelectState().Mode == types.DiffSelectModeHunk {
+			return self.c.Tr.SelectLineByLine
+		}
+		return self.c.Tr.SelectHunk
+	}
+	switch {
+	case self.diffSelectState().Mode != types.DiffSelectModeHunk:
+		return self.c.Tr.SelectModeLine
+	case self.diffSelectState().BlocksByEntity:
+		return self.c.Tr.SelectModeEntity
+	default:
+		return self.c.Tr.SelectModeUnit
+	}
 }
 
 // toggleRangeSelect starts or cancels a sticky range selection, which the plain
@@ -1042,9 +1093,19 @@ func (self *MainViewController) toggleRangeSelect() error {
 	} else {
 		sel.Mode = types.DiffSelectModeRange
 		sel.RangeIsSticky = true
+		sel.RangeByBlock = false
 		v.SetRangeSelectStart(v.SelectedLineIdx())
 	}
 	return nil
+}
+
+// extendsByBlock reports whether growing the range grows it a block at a time, as it does
+// from hunk mode where the renderer states entities, so that a range of units or of
+// entities can be staged together.
+func (self *MainViewController) extendsByBlock() bool {
+	sel := self.diffSelectState()
+	return (sel.Mode == types.DiffSelectModeHunk || sel.Mode == types.DiffSelectModeRange && sel.RangeByBlock) &&
+		self.c.Helpers().DiffLine.HasEntityRecords(self.context.GetView())
 }
 
 // extendRange grows a non-sticky range selection by one line in response to
@@ -1055,8 +1116,13 @@ func (self *MainViewController) extendRange(forward bool) error {
 		return nil
 	}
 	sel := self.diffSelectState()
+	if self.extendsByBlock() {
+		self.c.Helpers().DiffLine.ExtendRangeByBlock(self.context, forward)
+		return nil
+	}
 	if !self.selectingRange() {
 		sel.Mode = types.DiffSelectModeRange
+		sel.RangeByBlock = false
 		v.SetRangeSelectStart(v.SelectedLineIdx())
 	}
 	sel.RangeIsSticky = false

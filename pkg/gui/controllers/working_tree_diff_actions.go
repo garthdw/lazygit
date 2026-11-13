@@ -58,6 +58,16 @@ func (self *WorkingTreeDiffActions) showsStagedSide(pane types.DiffPaneContext) 
 // PrimaryAction stages the selected diff lines, or takes them back out of the index
 // when what is selected is the staged side of the diff.
 func (self *WorkingTreeDiffActions) PrimaryAction(pane types.DiffPaneContext, firstBufferLine int, lastBufferLine int) error {
+	// What is selected is whole units or entities, which the renderer can cut out better
+	// than the lines of a diff can say where one ends.
+	if sel := pane.DiffSelectState(); (sel.Mode == types.DiffSelectModeHunk || sel.Mode == types.DiffSelectModeRange && sel.RangeByBlock) &&
+		self.c.State().GetDiffRendererConfigManager().HasEntityPatchCommand() {
+		infos := self.c.Helpers().DiffLine.DiffLinesInBufferRange(pane.GetView(), firstBufferLine, lastBufferLine)
+		if len(entityTargets(infos, !sel.BlocksByEntity)) > 0 {
+			return self.StageByEntity(pane, firstBufferLine, lastBufferLine, !sel.BlocksByEntity)
+		}
+	}
+
 	if self.c.UserConfig().Git.DiffContextSize == 0 {
 		return fmt.Errorf(self.c.Tr.Actions.NotEnoughContextToStage,
 			self.c.UserConfig().Keybinding.Universal.IncreaseContextInDiffView)

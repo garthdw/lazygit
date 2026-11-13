@@ -20,7 +20,7 @@ var StageAChangeUnit = NewIntegrationTest(NewIntegrationTestArgs{
 
 		t.Views().Main().
 			IsFocused().
-			SelectedLines(Contains("-three")).
+			SelectedLines(Contains("-three"), Contains("+THREE")).
 			Press(keys.Main.StageChangeUnit)
 
 		t.Git().IndexContent("file1", "one\ntwo\nTHREE\nfour\nfive\nsix\nseven\neight\nnine\nten\n")

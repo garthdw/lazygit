@@ -141,19 +141,26 @@ func (self *DiffLineHelper) CollapseNonStickyRange(pane types.DiffPaneContext) {
 // there is nothing else to offer. Line by line it is simply the first change line on
 // screen. ok is false when the viewport shows no change at all.
 func (self *DiffLineHelper) changeToSelectOnScreen(view *gocui.View) (int, bool) {
-	if self.c.UserConfig().Gui.UseHunkModeInDiffView {
+	if self.blocksByDefault(view) {
 		return self.FirstChangeBlockInView(view)
 	}
 	return self.FirstChangeLineInView(view)
 }
 
 // hunkModeApplies reports whether an established selection should start out as the
-// whole change block around the given change line. That's what the config asks for,
+// whole change block around the given change line. That's what blocksByDefault says,
 // except over a file shown as one solid block of changes, where it would select the
 // whole file — see IsSingleHunkForWholeFile.
 func (self *DiffLineHelper) hunkModeApplies(view *gocui.View, changeViewLine int) bool {
-	return self.c.UserConfig().Gui.UseHunkModeInDiffView &&
-		!self.IsSingleHunkForWholeFile(view, changeViewLine)
+	return self.blocksByDefault(view) && !self.IsSingleHunkForWholeFile(view, changeViewLine)
+}
+
+// blocksByDefault reports whether a selection starts out as a whole change block: when
+// the config asks for hunk mode, and whenever the renderer states change units, which
+// are what staging from such a diff is built around.
+func (self *DiffLineHelper) blocksByDefault(view *gocui.View) bool {
+	return self.c.UserConfig().Gui.UseHunkModeInDiffView ||
+		self.HasEntityRecords(view)
 }
 
 // ShowSelectionAtLine moves the focused main view's selection to the given view line,
@@ -181,7 +188,7 @@ func (self *DiffLineHelper) SelectChangeBlock(
 	pane types.DiffPaneContext, changeViewLine int, scrollIntoView bool,
 ) {
 	view := pane.GetView()
-	start, end, ok := self.ChangeBlockBounds(view, changeViewLine)
+	start, end, ok := self.ChangeBlockBounds(view, changeViewLine, pane.DiffSelectState().BlocksByEntity)
 	if !ok {
 		pane.DiffSelectState().Mode = types.DiffSelectModeLine
 		view.CancelRangeSelect()
@@ -195,12 +202,12 @@ func (self *DiffLineHelper) SelectChangeBlock(
 // SelectedHunkBounds returns the change block selected in hunk mode. The range
 // anchor stays on the block's far end when a click moves the cursor before its
 // handler runs, so it still identifies the selected block.
-func (self *DiffLineHelper) SelectedHunkBounds(view *gocui.View) (int, int, bool) {
+func (self *DiffLineHelper) SelectedHunkBounds(view *gocui.View, byEntity bool) (int, int, bool) {
 	anchor := view.RangeSelectStartY()
 	if anchor < 0 {
 		return 0, 0, false
 	}
-	return self.ChangeBlockBounds(view, anchor)
+	return self.ChangeBlockBounds(view, anchor, byEntity)
 }
 
 // RefreshInclusionGutter updates the marks drawn over the diff in the main pane, which
@@ -271,4 +278,42 @@ func (self *DiffLineHelper) patchInclusion() func(types.DiffLineInfo) bool {
 // upper one.
 func (self *DiffLineHelper) ShowsCustomPatch(view *gocui.View) bool {
 	return view == self.c.Contexts().NormalSecondary.GetView() && self.patchInclusion() != nil
+}
+
+// HasEntityRecords reports whether the renderer of view's diff states the entities of its
+// rows, so that hunk mode selects change units and entities rather than runs of changes.
+func (self *DiffLineHelper) HasEntityRecords(view *gocui.View) bool {
+	return hasEntityRecords(self.resolveDiffLines(diffLineContents(view)))
+}
+
+// ExtendRangeByBlock grows the pane's selection to take in the block beyond its far end
+// in the given direction, so that it covers whole change blocks whichever way it is
+// grown. The selection only grows: the cursor is left at its top, and the anchor is at
+// its bottom.
+func (self *DiffLineHelper) ExtendRangeByBlock(pane types.DiffPaneContext, forward bool) {
+	view := pane.GetView()
+	sel := pane.DiffSelectState()
+	byEntity := sel.BlocksByEntity
+	top, bottom := view.SelectedLineRange()
+	sel.Mode = types.DiffSelectModeRange
+	sel.RangeIsSticky = false
+	sel.RangeByBlock = true
+
+	if forward {
+		next, ok := self.AdjacentChangeBlock(view, bottom, true, byEntity)
+		if !ok {
+			return
+		}
+		if _, end, ok := self.ChangeBlockBounds(view, next, byEntity); ok {
+			bottom = end
+		}
+	} else {
+		previous, ok := self.AdjacentChangeBlock(view, top, false, byEntity)
+		if !ok {
+			return
+		}
+		top = previous
+	}
+	view.SetRangeSelectStart(bottom)
+	self.ShowSelectionAtLine(view, top, true)
 }
