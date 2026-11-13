@@ -318,6 +318,15 @@ type GitConfig struct {
 	//   # applicable if the type is 'rawGit'.
 	//   args: []
 	//
+	//   # The command that prints the patch for staging or unstaging an entity
+	//   # or change unit that this renderer shows, for renderers that say which
+	//   # entity and unit each row belongs to (an OSC 1717 's' record). Its
+	//   # output is applied to the index with `git apply --cached`. Without it,
+	//   # the entity and unit staging commands are disabled for this renderer.
+	//   # It is a template; see the documentation linked below for the values
+	//   # it can refer to.
+	//   entityPatchCommand: ""
+	//
 	// See https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md for more information.
 	DiffRenderers []DiffRendererConfig `yaml:"diffRenderers"`
 	// Config relating to committing
@@ -406,6 +415,9 @@ type DiffRendererConfig struct {
 	Command DiffRendererCommandType `yaml:"command"`
 	// Extra arguments (array of strings) passed to the git command. Only applicable if the type is 'rawGit'.
 	Args []string `yaml:"args"`
+	// The command that prints the patch for staging (or unstaging) an entity or change unit that this renderer shows, for renderers that say which entity and unit each row belongs to (an OSC 1717 's' record). Its output is applied to the index with `git apply --cached`. Without it, the entity and unit staging commands are disabled for this renderer.
+	// It is a template; see https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md#staging-entities for the values it can refer to.
+	EntityPatchCommand string `yaml:"entityPatchCommand"`
 }
 
 type CommitConfig struct {
