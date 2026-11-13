@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
@@ -41,6 +42,12 @@ type parsedDiffLine struct {
 	Type    types.DiffLineType
 	NewLine int
 	OldLine int
+	NewEnd  int
+	OldEnd  int
+	// EntityID and Unit are what an 's' record says about the row (see
+	// parseEntityMetadata), put on every line the row shows.
+	EntityID string
+	Unit     int
 }
 
 // bufferLineParse is the parser's result for one buffer line: the recovered
@@ -144,14 +151,60 @@ func diffLineContents(view *gocui.View) []gocui.DiffLineContent {
 // the ones we don't understand. A row carries more than one when the rendering puts
 // two diff lines on it, as a side-by-side row does with a deletion and the addition
 // replacing it.
+//
+// An 's' record names no diff line: it says which entity and change unit the row
+// belongs to, and is put on the lines of the same file that the row shows.
 func parseDiffLineRecords(metadata []string) []parsedDiffLine {
 	parsed := make([]parsedDiffLine, 0, len(metadata))
+	var entity entityRecord
 	for _, record := range metadata {
 		if line, ok := parseDiffLineMetadata(record); ok {
 			parsed = append(parsed, line)
+		} else if parsedEntity, ok := parseEntityMetadata(record); ok {
+			entity = parsedEntity
+		}
+	}
+	if entity.id != "" {
+		for i := range parsed {
+			if parsed[i].Path == entity.path {
+				parsed[i].EntityID, parsed[i].Unit = entity.id, entity.unit
+			}
 		}
 	}
 	return parsed
+}
+
+// entityRecord is what an 's' record states.
+type entityRecord struct {
+	id   string
+	unit int
+	path string
+}
+
+// parseEntityMetadata parses the payload of an 's' record, in which a diff renderer
+// states which entity, and which of its change units, a row belongs to:
+//
+//	1;s;unit;entity-id;file
+//
+// The unit is 1-based and empty (0) for a row outside every unit, such as an entity's
+// header. The entity id is percent-encoded, since it may contain ';'.
+func parseEntityMetadata(payload string) (entityRecord, bool) {
+	fields := strings.SplitN(payload, ";", 5)
+	if len(fields) < 5 || fields[0] != "1" || fields[1] != "s" || fields[3] == "" {
+		return entityRecord{}, false
+	}
+	unit := 0
+	if fields[2] != "" {
+		var err error
+		if unit, err = strconv.Atoi(fields[2]); err != nil || unit < 1 {
+			return entityRecord{}, false
+		}
+	}
+	id, err := url.PathUnescape(fields[3])
+	if err != nil {
+		return entityRecord{}, false
+	}
+	return entityRecord{id: id, unit: unit, path: fields[4]}, true
 }
 
 // parseDiffLineIdentities recovers, for every row of a rendering, the diff lines it
@@ -428,12 +481,19 @@ func stripDiffPathPrefix(path string) string {
 // empty unless the line is a deletion, the only kind that needs it, and the
 // new-file line is empty on a file header, the one kind that has no line.
 //
+// A span ('e') states ranges instead, as start-end, either of which may be empty:
+//
+//	1;e;new-start-new-end;old-start-old-end;file
+//
 // ok is false for a payload of an unknown version or shape, so that the caller
 // can fall back to reading the rendered text.
 func parseDiffLineMetadata(payload string) (parsedDiffLine, bool) {
 	fields := strings.SplitN(payload, ";", 5)
 	if len(fields) < 5 || fields[0] != "1" {
 		return parsedDiffLine{}, false
+	}
+	if fields[1] == "e" {
+		return parseSpanMetadata(fields)
 	}
 
 	lineType, ok := diffLineTypeFromMetadata(fields[1])
@@ -460,6 +520,28 @@ func parseDiffLineMetadata(payload string) (parsedDiffLine, bool) {
 	}
 
 	return parsedDiffLine{Path: fields[4], Type: lineType, NewLine: newLine, OldLine: oldLine}, true
+}
+
+// parseSpanMetadata parses the fields of an 'e' record (see parseDiffLineMetadata).
+func parseSpanMetadata(fields []string) (parsedDiffLine, bool) {
+	parseRange := func(field string) (start int, end int, ok bool) {
+		if field == "" {
+			return 0, 0, true
+		}
+		startText, endText, found := strings.Cut(field, "-")
+		start, startErr := strconv.Atoi(startText)
+		end, endErr := strconv.Atoi(endText)
+		return start, end, found && startErr == nil && endErr == nil && 0 < start && start <= end
+	}
+	newLine, newEnd, newOk := parseRange(fields[2])
+	oldLine, oldEnd, oldOk := parseRange(fields[3])
+	if !newOk || !oldOk || newEnd+oldEnd == 0 {
+		return parsedDiffLine{}, false
+	}
+	return parsedDiffLine{
+		Path: fields[4], Type: types.DiffLineSpan,
+		NewLine: newLine, NewEnd: newEnd, OldLine: oldLine, OldEnd: oldEnd,
+	}, true
 }
 
 func diffLineTypeFromMetadata(typeField string) (types.DiffLineType, bool) {

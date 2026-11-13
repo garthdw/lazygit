@@ -231,6 +231,9 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | `` <space> `` | Stage | Toggle selection staged / unstaged. |
 | `` d `` | Discard | When unstaged change is selected, discard the change using `git reset`. When staged change is selected, unstage the change. |
 | `` E `` | Edit hunk | Edit selected hunk in external editor. |
+| `` s `` | Stage entity | Stage (or, on the staged side, unstage) every change of the entity the selected rows belong to, as the diff renderer says. |
+| `` u `` | Stage change unit | Stage (or, on the staged side, unstage) the change units of the selected rows, as the diff renderer says; a row that belongs to no unit, such as an entity's header, stands for the whole entity. |
+| `` i `` | Show consumers | List what depends on the entity of the selected row, and the tests that reach it, as the diff renderer says. Enter opens one in the editor. |
 | `` <ctrl+o> `` | Copy selected diff lines to clipboard |  |
 | `` <left>, h `` | Go to previous hunk |  |
 | `` <right>, l `` | Go to next hunk |  |
@@ -317,6 +320,9 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | `` <space> `` | Stage | Toggle selection staged / unstaged. |
 | `` d `` | Discard | When unstaged change is selected, discard the change using `git reset`. When staged change is selected, unstage the change. |
 | `` E `` | Edit hunk | Edit selected hunk in external editor. |
+| `` s `` | Stage entity | Stage (or, on the staged side, unstage) every change of the entity the selected rows belong to, as the diff renderer says. |
+| `` u `` | Stage change unit | Stage (or, on the staged side, unstage) the change units of the selected rows, as the diff renderer says; a row that belongs to no unit, such as an entity's header, stands for the whole entity. |
+| `` i `` | Show consumers | List what depends on the entity of the selected row, and the tests that reach it, as the diff renderer says. Enter opens one in the editor. |
 | `` <ctrl+o> `` | Copy selected diff lines to clipboard |  |
 | `` <left>, h `` | Go to previous hunk |  |
 | `` <right>, l `` | Go to next hunk |  |

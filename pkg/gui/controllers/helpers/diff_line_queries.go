@@ -123,23 +123,34 @@ func repoPathOfTreePath(path string, treesDir string, worktreePath string) strin
 }
 
 // ChangeLinesInBufferRange returns the change lines — the additions and deletions —
-// among the diff lines shown by the rows in the inclusive buffer-line range. Those are
+// among the diff lines shown by the rows in the inclusive buffer-line range, plus the
+// spans standing for groups of them (see types.DiffLineSpan). Those are
 // the lines a patch is built from: a patch carries whatever context it needs around
 // them by itself, so a selection contributes only its changes.
 func (self *DiffLineHelper) ChangeLinesInBufferRange(view *gocui.View, first int, last int) []types.DiffLineInfo {
 	return lo.Filter(self.DiffLinesInBufferRange(view, first, last),
-		func(info types.DiffLineInfo, _ int) bool { return info.IsChange() })
+		func(info types.DiffLineInfo, _ int) bool { return info.IsChange() || info.Type == types.DiffLineSpan })
 }
 
 // changeLines resolves view's rendered diff to one flag per buffer line: whether
 // that row is a change line (an addition or a deletion), as opposed to context, a
 // header, or a row whose identity couldn't be recovered. Those are the rows a
 // selection is anchored on and navigation moves between.
+//
+// A rendering may show every change as a span, such as a `~` row standing for a line
+// changed in place, and no addition or deletion of its own. Then the spans are the
+// change lines, or there would be nothing to select in it.
 func (self *DiffLineHelper) changeLines(view *gocui.View) []bool {
 	resolved := self.resolveDiffLines(diffLineContents(view))
 	isChange := make([]bool, len(resolved))
 	for i, r := range resolved {
 		isChange[i] = r.ok && r.info.IsChange()
+	}
+	if lo.Contains(isChange, true) {
+		return isChange
+	}
+	for i, r := range resolved {
+		isChange[i] = r.ok && r.info.Type == types.DiffLineSpan
 	}
 	return isChange
 }

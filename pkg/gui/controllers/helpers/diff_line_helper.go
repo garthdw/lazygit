@@ -196,6 +196,11 @@ func diffLineInfoConverterIn(worktreePath string) func(parsedDiffLine) types.Dif
 			Type:    parsed.Type,
 			NewLine: parsed.NewLine,
 			OldLine: parsed.OldLine,
+			NewEnd:  parsed.NewEnd,
+			OldEnd:  parsed.OldEnd,
+
+			EntityID: parsed.EntityID,
+			Unit:     parsed.Unit,
 		}
 	}
 }

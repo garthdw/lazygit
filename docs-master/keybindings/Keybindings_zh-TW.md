@@ -66,6 +66,9 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | `` <space> `` | 切換預存 | 切換現有行的狀態 (已預存/未預存) |
 | `` d `` | 刪除變更 (git reset) | 選取未暫存的變更時，使用 `git reset` 捨棄變更。選取已暫存的變更時，取消暫存變更。 |
 | `` E `` | 編輯程式碼塊 | 在外部編輯器中編輯選中的程式碼塊。 |
+| `` s `` | Stage entity | Stage (or, on the staged side, unstage) every change of the entity the selected rows belong to, as the diff renderer says. |
+| `` u `` | Stage change unit | Stage (or, on the staged side, unstage) the change units of the selected rows, as the diff renderer says; a row that belongs to no unit, such as an entity's header, stands for the whole entity. |
+| `` i `` | Show consumers | List what depends on the entity of the selected row, and the tests that reach it, as the diff renderer says. Enter opens one in the editor. |
 | `` <ctrl+o> `` | Copy selected diff lines to clipboard |  |
 | `` <left>, h `` | 選擇上一段 |  |
 | `` <right>, l `` | 選擇下一段 |  |
@@ -346,6 +349,9 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | `` <space> `` | 切換預存 | 切換現有行的狀態 (已預存/未預存) |
 | `` d `` | 刪除變更 (git reset) | 選取未暫存的變更時，使用 `git reset` 捨棄變更。選取已暫存的變更時，取消暫存變更。 |
 | `` E `` | 編輯程式碼塊 | 在外部編輯器中編輯選中的程式碼塊。 |
+| `` s `` | Stage entity | Stage (or, on the staged side, unstage) every change of the entity the selected rows belong to, as the diff renderer says. |
+| `` u `` | Stage change unit | Stage (or, on the staged side, unstage) the change units of the selected rows, as the diff renderer says; a row that belongs to no unit, such as an entity's header, stands for the whole entity. |
+| `` i `` | Show consumers | List what depends on the entity of the selected row, and the tests that reach it, as the diff renderer says. Enter opens one in the editor. |
 | `` <ctrl+o> `` | Copy selected diff lines to clipboard |  |
 | `` <left>, h `` | 選擇上一段 |  |
 | `` <right>, l `` | 選擇下一段 |  |

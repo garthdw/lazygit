@@ -380,3 +380,145 @@ func TestSwitchToFocusedDiffRenderer(t *testing.T) {
 	config.RestoreBrowsingDiffRenderer()
 	assert.Equal(t, 0, currentIndex(), "a reverse cycle after the switch is kept")
 }
+
+func TestGetEntityPatchCommand(t *testing.T) {
+	const command = `semdiff patch --entity {{entity}} {{if units}}--unit {{units}}{{end}} {{if staged}}--staged --reverse{{end}} -- {{path}} {{oldPath}}`
+	quote := func(text string) string { return "'" + text + "'" }
+
+	scenarios := []struct {
+		name     string
+		command  string
+		values   EntityPatchValues
+		expected string
+		hasError bool
+	}{
+		{
+			name:     "a whole entity is staged without units",
+			command:  command,
+			values:   EntityPatchValues{Entity: "src/a.ts::function::f", Path: "src/a.ts"},
+			expected: `semdiff patch --entity 'src/a.ts::function::f'   -- 'src/a.ts' `,
+		},
+		{
+			name:     "units and the unstaging flags",
+			command:  command,
+			values:   EntityPatchValues{Entity: "a.ts::function::f", Units: []int{1, 3}, Path: "a.ts", Unstage: true},
+			expected: `semdiff patch --entity 'a.ts::function::f' --unit 1 3 --staged --reverse -- 'a.ts' `,
+		},
+		{
+			name:     "a staged rename names both paths",
+			command:  command,
+			values:   EntityPatchValues{Entity: "new.ts::function::f", Path: "new.ts", OldPath: "old.ts", Unstage: true},
+			expected: `semdiff patch --entity 'new.ts::function::f'  --staged --reverse -- 'new.ts' 'old.ts'`,
+		},
+		{
+			name:     "the values can be written with a leading dot",
+			command:  `p {{.entity}} {{.path}} {{.reverse}}`,
+			values:   EntityPatchValues{Entity: "e", Path: "a b"},
+			expected: `p 'e' 'a b' false`,
+		},
+		{
+			name:     "an unknown variable is an error",
+			command:  `p {{nope}}`,
+			hasError: true,
+		},
+	}
+
+	for _, s := range scenarios {
+		t.Run(s.name, func(t *testing.T) {
+			userConfig := &UserConfig{}
+			userConfig.Git.DiffRenderers = []DiffRendererConfig{{Command: "semdiff --pager", EntityPatchCommand: s.command}}
+			manager := NewDiffRendererConfigManager(func() *UserConfig { return userConfig })
+
+			assert.True(t, manager.HasEntityPatchCommand())
+			result, err := manager.GetEntityPatchCommand(s.values, quote)
+			if s.hasError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, s.expected, result)
+		})
+	}
+
+	t.Run("a renderer without the command has none", func(t *testing.T) {
+		userConfig := &UserConfig{}
+		userConfig.Git.DiffRenderers = []DiffRendererConfig{{Command: "delta"}}
+		manager := NewDiffRendererConfigManager(func() *UserConfig { return userConfig })
+
+		assert.False(t, manager.HasEntityPatchCommand())
+		result, err := manager.GetEntityPatchCommand(EntityPatchValues{}, quote)
+		assert.NoError(t, err)
+		assert.Equal(t, "", result)
+	})
+
+	t.Run("no renderers have none either", func(t *testing.T) {
+		manager := NewDiffRendererConfigManager(func() *UserConfig { return &UserConfig{} })
+
+		assert.False(t, manager.HasEntityPatchCommand())
+	})
+}
+
+func TestGetConsumersCommand(t *testing.T) {
+	const command = `semdiff impact --entity {{entity}} --depth {{depth}} --json -- {{path}}`
+	quote := func(text string) string { return "'" + text + "'" }
+
+	scenarios := []struct {
+		name     string
+		command  string
+		values   ConsumersValues
+		expected string
+		hasError bool
+	}{
+		{
+			name:     "the text values are quoted and the depth is not",
+			command:  command,
+			values:   ConsumersValues{Entity: "src/a.ts::function::f;1", Depth: 2, Path: "src/a b.ts"},
+			expected: `semdiff impact --entity 'src/a.ts::function::f;1' --depth 2 --json -- 'src/a b.ts'`,
+		},
+		{
+			name:     "no depth means all of them",
+			command:  command,
+			values:   ConsumersValues{Entity: "e", Path: "p"},
+			expected: `semdiff impact --entity 'e' --depth 0 --json -- 'p'`,
+		},
+		{
+			name:     "the values can be written with a leading dot",
+			command:  `c {{.entity}} {{.depth}}`,
+			values:   ConsumersValues{Entity: "e", Depth: 1},
+			expected: `c 'e' 1`,
+		},
+		{
+			name:     "an unknown variable is an error",
+			command:  `c {{nope}}`,
+			hasError: true,
+		},
+	}
+
+	for _, s := range scenarios {
+		t.Run(s.name, func(t *testing.T) {
+			userConfig := &UserConfig{}
+			userConfig.Git.DiffRenderers = []DiffRendererConfig{{Command: "semdiff --pager", ConsumersCommand: s.command}}
+			manager := NewDiffRendererConfigManager(func() *UserConfig { return userConfig })
+
+			assert.True(t, manager.HasConsumersCommand())
+			result, err := manager.GetConsumersCommand(s.values, quote)
+			if s.hasError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, s.expected, result)
+		})
+	}
+
+	t.Run("a renderer without the command has none", func(t *testing.T) {
+		userConfig := &UserConfig{}
+		userConfig.Git.DiffRenderers = []DiffRendererConfig{{Command: "delta", EntityPatchCommand: "x"}}
+		manager := NewDiffRendererConfigManager(func() *UserConfig { return userConfig })
+
+		assert.False(t, manager.HasConsumersCommand())
+		result, err := manager.GetConsumersCommand(ConsumersValues{}, quote)
+		assert.NoError(t, err)
+		assert.Equal(t, "", result)
+	})
+}
