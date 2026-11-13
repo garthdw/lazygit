@@ -362,7 +362,8 @@ func (self *ConfirmationHelper) resizeMenu(parentPopupContext types.Context) {
 	menuContext := self.c.Contexts().Menu
 	// we want the unfiltered length here so that if we're filtering we don't
 	// resize the window
-	itemCount := menuContext.UnfilteredLen()
+	// Section headers take a line each, and are not items.
+	itemCount := menuContext.UnfilteredLen() + len(menuContext.GetNonModelItems())
 	offset := 3
 	panelWidth := self.getPopupPanelWidth(menuMaxWidth)
 	contentWidth := panelWidth - 2 // minus 2 for the frame
