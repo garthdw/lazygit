@@ -35,6 +35,7 @@ var StageAnEntity = NewIntegrationTest(NewIntegrationTestArgs{
 			NavigateToLine(Contains("ENTITY late")).
 			Press(keys.Main.StageEntity)
 
+		t.ExpectToast(Equals("usesIntroduced: NINE is used by nothing staged"))
 		t.Git().IndexContent("file1", "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nNINE\nten\n")
 		t.FileSystem().FileContent("../entity-calls", Equals("file1::fn::late||false|file1|\n"))
 	},

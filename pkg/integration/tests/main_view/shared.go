@@ -80,6 +80,8 @@ PATCH
 +NINE
  ten
 PATCH
+echo "warning: usesIntroduced: NINE is used by nothing staged" >&2
+echo "not a warning" >&2
 ;;
 *) echo "no patch for $1|$2|$3" >&2; exit 1 ;;
 esac
