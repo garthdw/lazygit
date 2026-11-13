@@ -588,6 +588,8 @@ var tests = []*components.IntegrationTest{
 	main_view.UnstageAnEntity,
 	main_view.UnstageDiffLines,
 	main_view.UnstageEveryChangeOfANewFileAsTheFile,
+	main_view.UnstageInEntityMode,
+	main_view.UnstageInUnitMode,
 	main_view.WrapOnlyTheDiff,
 	misc.ConfirmOnQuit,
 	misc.CopyConfirmationMessageToClipboard,
