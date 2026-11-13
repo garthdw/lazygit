@@ -314,11 +314,29 @@ func (self *MainViewController) togglePanel() error {
 	// NextInStack only finds while our context is still the focused main view, so
 	// read it before pushing the other pane.
 	isDiff := self.isDiffView()
+	leaving := *self.diffSelectState()
 	self.c.Context().Push(self.otherContext, types.OnFocusOpts{})
 	if isDiff {
 		self.c.Helpers().DiffLine.EstablishSelection(self.otherContext, -1)
+		self.carryHunkModeOver(leaving)
 	}
 	return nil
+}
+
+// carryHunkModeOver keeps the hunk mode the user chose in the pane being left, in the
+// pane switched to, so that stepping between the two halves of a diff does not undo it. Its
+// entity granularity only carries over where the renderer states entities there too;
+// failing that it is the unit or hunk that does.
+func (self *MainViewController) carryHunkModeOver(leaving types.DiffSelectState) {
+	view := self.otherContext.GetView()
+	if leaving.Mode != types.DiffSelectModeHunk || !leaving.UserEnabledHunkMode || !view.Highlight {
+		return
+	}
+	sel := self.otherContext.DiffSelectState()
+	sel.Mode = types.DiffSelectModeHunk
+	sel.UserEnabledHunkMode = true
+	sel.BlocksByEntity = leaving.BlocksByEntity && self.c.Helpers().DiffLine.HasEntityRecords(view)
+	self.c.Helpers().DiffLine.SelectChangeBlock(self.otherContext, view.SelectedLineIdx(), false)
 }
 
 // escape dismisses the selection a step at a time before leaving the view: a range
