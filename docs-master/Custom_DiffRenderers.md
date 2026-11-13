@@ -106,6 +106,8 @@ The command is run by a shell, so the text values are quoted for you; don't put 
 | `{{units}}` | The unit numbers, separated by spaces; empty to stage the whole entity |
 | `{{staged}}`, `{{reverse}}` | True when unstaging (both are the same), false when staging |
 
+The renderer in use when you press the key is the one asked: if `focusedDiffRenderer` switched to another one, it is that one's `entityPatchCommand`.
+
 ## Showing the consumers of an entity
 
 A renderer that says which entity each row belongs to (see above) can also be asked what depends on it, with `consumersCommand`. It must print JSON, described below, on stdout. A failing command (non-zero exit) is reported to the user with the first line of its error output. The command is run in the repo's root, and the consumers popup is disabled, with that as the reason, for renderers that don't have one.
