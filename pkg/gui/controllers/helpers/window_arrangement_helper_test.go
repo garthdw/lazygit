@@ -11,6 +11,7 @@ import (
 	"github.com/jesseduffield/lazygit/pkg/config"
 	"github.com/jesseduffield/lazygit/pkg/gui/types"
 	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert"
 )
 
 // contentHeights builds a ContentHeightForWindow function from a map of window
@@ -1065,4 +1066,61 @@ func renderLayout(windows map[string]boxlayout.Dimensions) string {
 	output = strings.TrimSpace(output)
 
 	return output
+}
+
+func TestStagedPaneFitsItsContent(t *testing.T) {
+	loading := false
+	layout := func(splitMode string, stagedRows int) (boxlayout.Dimensions, boxlayout.Dimensions) {
+		args := WindowArrangementArgs{
+			Width:                  120,
+			Height:                 40,
+			UserConfig:             config.GetDefaultConfig(),
+			CurrentWindow:          "main",
+			CurrentSideWindow:      "files",
+			ActiveViewForWindow:    func(window string) string { return window },
+			ContentHeightForWindow: contentHeights(map[string]int{"main": 200, "secondary": stagedRows}),
+			IsLoadingWindow:        func(string) bool { return loading },
+			MainPanes:              types.BothMainPanes,
+			ScreenMode:             types.SCREEN_NORMAL,
+		}
+		args.UserConfig.Gui.MainPanelSplitMode = splitMode
+		windows := GetWindowDimensions(args)
+		return windows["main"], windows["secondary"]
+	}
+	height := func(dimensions boxlayout.Dimensions) int { return dimensions.Y1 - dimensions.Y0 + 1 }
+
+	main, staged := layout("vertical", 3)
+	assert.Equal(t, 3+2, height(staged), "three rows and the frame")
+	assert.Equal(t, staged.Y0, main.Y1+1)
+
+	main, staged = layout("vertical", 200)
+	assert.LessOrEqual(t, height(main)-height(staged), 1, "never more than half")
+	assert.GreaterOrEqual(t, height(main)-height(staged), 0)
+
+	// Rows still being read in: only as many are read as the pane is tall, so
+	// sizing the pane to them would keep it at what it has read so far.
+	loading = true
+	main, staged = layout("vertical", 3)
+	assert.LessOrEqual(t, height(main)-height(staged), 1, "half while loading")
+	loading = false
+
+	// Full screen with the staged pane focused: it alone takes the section.
+	args := WindowArrangementArgs{
+		Width:                  120,
+		Height:                 40,
+		UserConfig:             config.GetDefaultConfig(),
+		CurrentWindow:          "secondary",
+		CurrentSideWindow:      "files",
+		ActiveViewForWindow:    func(window string) string { return window },
+		ContentHeightForWindow: contentHeights(map[string]int{"main": 200, "secondary": 3}),
+		IsLoadingWindow:        func(string) bool { return false },
+		MainPanes:              types.BothMainPanes,
+		ScreenMode:             types.SCREEN_FULL,
+	}
+	args.UserConfig.Gui.MainPanelSplitMode = "vertical"
+	assert.Greater(t, height(GetWindowDimensions(args)["secondary"]), 3+2)
+
+	main, staged = layout("horizontal", 3)
+	assert.Equal(t, main.Y0, staged.Y0, "side by side, height is not the content's")
+	assert.Equal(t, height(main), height(staged))
 }
