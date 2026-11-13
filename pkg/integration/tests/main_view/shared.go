@@ -140,3 +140,65 @@ func entityStagingWholeFileRenderer() config.DiffRendererConfig {
 		EntityPatchCommand: entityStagingCommand,
 	}
 }
+
+// The tests of the consumers popup use the renderer of the staging tests, whose rows
+// say which entity they belong to, and a consumersCommand that stands in for one: it
+// prints a fixed report for each depth, and records what it was asked for in
+// ../consumers-calls as entity|depth|path.
+//
+// The reports are not what a renderer would print for one repo; they are what shows
+// each part of the popup: at depth 1 an incomplete report with a possible caller, at
+// depth 2 a complete one with more rows, and for all depths (0) one found by name.
+const fakeConsumersScript = `#!/bin/sh
+printf '%s|%s|%s\n' "$1" "$2" "$3" >> ../consumers-calls
+case "$2" in
+1) cat <<'JSON'
+{"schemaVersion": 1, "entity": {"name": "early", "breadcrumb": ["file1", "Outer", "early"]},
+ "basis": "graph", "depth": 1, "complete": false,
+ "incompleteReasons": [{"code": "value_refs", "detail": "1 name used as a value"}],
+ "dependents": [{"name": "onAdd", "breadcrumb": ["src/checkout.ts", "onAdd"], "file": "src/checkout.ts", "line": 48, "depth": 1}],
+ "tests": [{"name": "adds", "breadcrumb": ["src/cart.spec.ts", "cart", "adds"], "file": "src/cart.spec.ts", "line": 14}],
+ "possibleCallers": [{"name": "register", "file": "src/events.ts", "line": 30, "sites": [{"kind": "value_ref", "line": 33}]}],
+ "futureField": true}
+JSON
+;;
+2) cat <<'JSON'
+{"schemaVersion": 1, "entity": {"name": "early", "breadcrumb": ["file1", "Outer", "early"]},
+ "basis": "graph", "depth": 2, "complete": true, "incompleteReasons": [],
+ "dependents": [
+  {"name": "render", "breadcrumb": ["src/checkout.ts", "render"], "file": "src/checkout.ts", "line": 12, "depth": 2},
+  {"name": "onAdd", "breadcrumb": ["src/checkout.ts", "onAdd"], "file": "src/checkout.ts", "line": 48, "depth": 1}],
+ "tests": [], "possibleCallers": []}
+JSON
+;;
+0) cat <<'JSON'
+{"schemaVersion": 1, "entity": {"name": "early", "breadcrumb": ["file1", "Outer", "early"]},
+ "basis": "textual", "depth": 0, "complete": false,
+ "incompleteReasons": [{"code": "textual", "detail": "matched by name"}],
+ "dependents": [{"name": "legacy", "breadcrumb": ["src/old.ts", "legacy"], "file": "src/old.ts", "line": 7, "depth": 1}],
+ "tests": [], "possibleCallers": []}
+JSON
+;;
+*) echo "no report for depth $2
+second line" >&2; exit 1 ;;
+esac
+`
+
+const consumersCommand = `sh ../consumers.sh {{entity}} {{depth}} {{path}}`
+
+func consumersRenderer(consumersCommand string) config.DiffRendererConfig {
+	renderer := entityStagingRenderer("")
+	renderer.ConsumersCommand = consumersCommand
+	return renderer
+}
+
+func setUpConsumersConfig(cfg *config.AppConfig) {
+	cfg.GetUserConfig().Gui.UseHunkModeInDiffView = false
+	cfg.GetUserConfig().OS.EditAtLine = "echo {{filename}}:{{line}} > edit-command"
+	cfg.GetUserConfig().Git.DiffRenderers = []config.DiffRendererConfig{consumersRenderer(consumersCommand)}
+}
+
+func setUpConsumersRepo(shell *Shell) {
+	shell.CreateFile("../consumers.sh", fakeConsumersScript)
+	setUpEntityStagingRepo(shell, false)
+}
