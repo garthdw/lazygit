@@ -873,6 +873,8 @@ keybinding:
     toggleSelectHunk: a
     pickBothHunks: b
     editSelectHunk: E
+    stageEntity: s
+    stageChangeUnit: u
   submodules:
     init: i
     update: u

@@ -696,6 +696,8 @@ type KeybindingMainConfig struct {
 	ToggleSelectHunk Keybinding `yaml:"toggleSelectHunk"`
 	PickBothHunks    Keybinding `yaml:"pickBothHunks"`
 	EditSelectHunk   Keybinding `yaml:"editSelectHunk"`
+	StageEntity      Keybinding `yaml:"stageEntity"`
+	StageChangeUnit  Keybinding `yaml:"stageChangeUnit"`
 }
 
 type KeybindingSubmodulesConfig struct {
@@ -1210,6 +1212,8 @@ func GetDefaultConfigForPlatform(platform string) *UserConfig {
 				ToggleSelectHunk: Keybinding{"a"},
 				PickBothHunks:    Keybinding{"b"},
 				EditSelectHunk:   Keybinding{"E"},
+				StageEntity:      Keybinding{"s"},
+				StageChangeUnit:  Keybinding{"u"},
 			},
 			Submodules: KeybindingSubmodulesConfig{
 				Init:     Keybinding{"i"},

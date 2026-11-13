@@ -2544,6 +2544,34 @@
             }
           ],
           "default": "E"
+        },
+        "stageEntity": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "s"
+        },
+        "stageChangeUnit": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "u"
         }
       },
       "additionalProperties": false,

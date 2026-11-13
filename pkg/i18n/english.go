@@ -343,6 +343,15 @@ type TranslationSet struct {
 	RemoveSelectionFromPatchTooltip       string
 	EditHunk                              string
 	EditHunkTooltip                       string
+	StageEntity                           string
+	UnstageEntity                         string
+	StageEntityTooltip                    string
+	StageChangeUnit                       string
+	UnstageChangeUnit                     string
+	StageChangeUnitTooltip                string
+	NoEntityPatchCommand                  string
+	NoEntityAtSelection                   string
+	EntityPatchCommandFailed              string
 	ToggleDiffPane                        string
 	ToggleDiffPaneTooltip                 string
 	ReturnToFilesPanel                    string
@@ -1579,6 +1588,15 @@ func EnglishTranslationSet() *TranslationSet {
 		RemoveSelectionFromPatchTooltip:      "Remove the selected lines from this commit. This runs an interactive rebase in the background, so you may get a merge conflict if a later commit also changes these lines.",
 		EditHunk:                             `Edit hunk`,
 		EditHunkTooltip:                      "Edit selected hunk in external editor.",
+		StageEntity:                          "Stage entity",
+		UnstageEntity:                        "Unstage entity",
+		StageEntityTooltip:                   "Stage (or, on the staged side, unstage) every change of the entity the selected rows belong to, as the diff renderer says.",
+		StageChangeUnit:                      "Stage change unit",
+		UnstageChangeUnit:                    "Unstage change unit",
+		StageChangeUnitTooltip:               "Stage (or, on the staged side, unstage) the change units of the selected rows, as the diff renderer says; a row that belongs to no unit, such as an entity's header, stands for the whole entity.",
+		NoEntityPatchCommand:                 "The diff renderer has no entityPatchCommand",
+		NoEntityAtSelection:                  "The diff renderer doesn't say which entity the selected rows belong to",
+		EntityPatchCommandFailed:             "The entityPatchCommand failed: {{.error}}",
 		ToggleDiffPane:                       "Switch diff pane",
 		ToggleDiffPaneTooltip:                "Switch to the other focused diff pane.",
 		ReturnToFilesPanel:                   `Return to files panel`,
