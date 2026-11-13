@@ -74,12 +74,24 @@ type eraseInLineFromCursor struct{}
 
 func (self eraseInLineFromCursor) isInstruction() {}
 
+// eraseLine asks the view to blank the whole current line (EL 2).
+type eraseLine struct{}
+
+func (self eraseLine) isInstruction() {}
+
 // cursorDown asks the view to advance N rows. Emitted when CUP / CUD /
-// CNL / VPA targets a row past the current one; backward moves are
+// CNL / VPA targets a row past the current one; backward absolute moves are
 // ignored because the view's buffer is line-based and can't undo.
 type cursorDown struct{ n int }
 
 func (self cursorDown) isInstruction() {}
+
+// cursorUp asks the view to move back N rows (CUU), so that a program
+// redrawing something in place, like a progress spinner, overwrites it. It
+// never reaches above the top of the pseudo-terminal screen.
+type cursorUp struct{ n int }
+
+func (self cursorUp) isInstruction() {}
 
 // cursorForward asks the view to materialize N space cells. Emitted
 // when CUF advances the cursor right — ConPTY uses CUF (often paired
@@ -233,15 +245,16 @@ func (ei *escapeInterpreter) emitCursorAdvance(n int) {
 	ei.screenCol = 1
 }
 
-// firstParamOrDefault returns the first CSI parameter parsed as an int,
-// or dflt if it's absent / empty / unparseable.
-func (ei *escapeInterpreter) firstParamOrDefault(dflt int) int {
+// firstParamOrOne returns the first CSI parameter parsed as an int, or 1 (the
+// default of every cursor-movement sequence) if it's absent / empty /
+// unparseable.
+func (ei *escapeInterpreter) firstParamOrOne() int {
 	if len(ei.csiParam) == 0 || ei.csiParam[0] == "" {
-		return dflt
+		return 1
 	}
 	n, err := strconv.Atoi(ei.csiParam[0])
 	if err != nil {
-		return dflt
+		return 1
 	}
 	return n
 }
@@ -307,7 +320,7 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 			ei.csiParam = append(ei.csiParam, "0")
 		case characterEquals(ch, 'K'),
 			characterEquals(ch, 'H'), characterEquals(ch, 'f'), characterEquals(ch, 'd'),
-			characterEquals(ch, 'B'), characterEquals(ch, 'E'),
+			characterEquals(ch, 'A'), characterEquals(ch, 'B'), characterEquals(ch, 'E'),
 			characterEquals(ch, 'C'):
 			// fall through — let stateParams handle these with default
 			// params (CUP/VPA default to row 1, CUD/CNL/CUF default to
@@ -373,10 +386,13 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 				}
 			}
 
-			if p == 0 {
+			switch p {
+			case 0:
 				ei.instruction = eraseInLineFromCursor{}
-			} else {
-				// non-zero values of P not supported
+			case 2:
+				ei.instruction = eraseLine{}
+			default:
+				// erasing to the cursor (P = 1) is not supported
 				ei.instruction = noInstruction{}
 			}
 
@@ -386,7 +402,7 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 		case characterEquals(ch, 'H'), characterEquals(ch, 'f'),
 			characterEquals(ch, 'd'):
 			// CUP / HVP (absolute (row, col), col ignored) or VPA (absolute row).
-			targetRow := ei.firstParamOrDefault(1)
+			targetRow := ei.firstParamOrOne()
 			if targetRow <= 1 {
 				// Cursor home. ConPTY emits this (after [2J) at the start of
 				// every screen, so it marks where ConPTY's coordinate origin
@@ -404,11 +420,19 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 			ei.state = stateNone
 			ei.csiParam = nil
 			return true, nil
+		case characterEquals(ch, 'A'):
+			if n := min(ei.firstParamOrOne(), ei.screenRow-1); n > 0 {
+				ei.instruction = cursorUp{n: n}
+				ei.screenRow -= n
+			}
+			ei.state = stateNone
+			ei.csiParam = nil
+			return true, nil
 		case characterEquals(ch, 'B'), characterEquals(ch, 'E'):
 			// CUD / CNL — relative row advance by N. CNL also resets
 			// the column, which we don't track, so the two are
 			// equivalent for our purposes.
-			ei.emitCursorAdvance(ei.firstParamOrDefault(1))
+			ei.emitCursorAdvance(ei.firstParamOrOne())
 			ei.state = stateNone
 			ei.csiParam = nil
 			return true, nil
@@ -416,7 +440,7 @@ func (ei *escapeInterpreter) parseOne(ch []byte) (isEscape bool, err error) {
 			// CUF — cursor forward N. Emit space cells so the gap
 			// renders. (screenCol is updated by the view via
 			// notifyCellsWritten as those spaces are emitted.)
-			ei.instruction = cursorForward{n: ei.firstParamOrDefault(1)}
+			ei.instruction = cursorForward{n: ei.firstParamOrOne()}
 			ei.state = stateNone
 			ei.csiParam = nil
 			return true, nil
