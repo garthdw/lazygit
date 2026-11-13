@@ -265,23 +265,58 @@ func (self *DiffLineHelper) restoreDiffLinePositionOnRerender(
 	)
 }
 
+// stepKind is what a place in a diff is counted in when it is remembered across acting on
+// it, which is what the selection steps over: change lines in hunk mode, or those and the
+// spans a renderer shows a change as when it has no line of its own for it, line by line.
+// Where the renderer states entities, hunk mode steps over change units or entities.
+type stepKind int
+
+const (
+	stepChangeLines stepKind = iota
+	stepLinesAndSpans
+	stepUnits
+	stepEntities
+)
+
+// stepKindOf is the kind of step the selection mode in sel moves by in rows.
+func stepKindOf(sel *types.DiffSelectState, rows []resolvedDiffLine) stepKind {
+	switch {
+	case sel.Mode != types.DiffSelectModeHunk:
+		return stepLinesAndSpans
+	case !hasEntityRecords(rows):
+		return stepChangeLines
+	case sel.BlocksByEntity:
+		return stepEntities
+	default:
+		return stepUnits
+	}
+}
+
 // stepRows says which rows of a resolved diff are the places the selection carries on
-// from after an action: the change lines and, with withSpans, the spans a renderer shows
-// a change as when it has no line of its own for it, such as a `~` row. Hunk mode has to
-// go without them, since a block of changes it selects is of change lines alone. The
-// header of an entity that has
-// rows under it is not one, being a stand-in for what is under it and gone when that has
-// been staged. It is told by the row after it belonging to the same entity.
+// from after an action: the change lines and, with stepLinesAndSpans, the spans a
+// renderer shows a change as when it has no line of its own for it, such as a `~` row.
+// Hunk mode has to go without them, since a block of changes it selects is of change
+// lines alone. The header of an entity that has rows under it is not one, being a
+// stand-in for what is under it and gone when that has been staged. It is told by the row
+// after it belonging to the same entity. With the block kinds a place is the first row of
+// a change unit or an entity.
 //
 // Without spans, which is every diff git renders, these are the change lines.
-func stepRows(rows []resolvedDiffLine, withSpans bool) []bool {
+func stepRows(rows []resolvedDiffLine, kind stepKind) []bool {
 	steps := make([]bool, len(rows))
+	if kind >= stepUnits && hasEntityRecords(rows) {
+		blocks := blocksOfRows(rows, kind == stepEntities)
+		for i, block := range blocks {
+			steps[i] = block >= 0 && (i == 0 || blocks[i-1] != block)
+		}
+		return steps
+	}
 	for i, row := range rows {
 		switch {
 		case !row.ok:
 		case row.info.IsChange():
 			steps[i] = true
-		case withSpans && row.info.Type == types.DiffLineSpan:
+		case kind == stepLinesAndSpans && row.info.Type == types.DiffLineSpan:
 			isHeader := row.info.EntityID != "" && row.info.Unit == 0 && i+1 < len(rows) &&
 				rows[i+1].ok && rows[i+1].info.EntityID == row.info.EntityID &&
 				rows[i+1].info.Path == row.info.Path
@@ -298,9 +333,9 @@ func stepRows(rows []resolvedDiffLine, withSpans bool) []bool {
 // It is how a place in a diff is remembered across acting on it: an action consumes
 // the lines it acted on, so the identity of the line the user was on is gone, but the
 // place it left behind is the same one that identity used to have.
-func (self *DiffLineHelper) ChangeLineOrdinal(view *gocui.View, bufferLine int, withSpans bool) int {
+func (self *DiffLineHelper) ChangeLineOrdinal(view *gocui.View, bufferLine int, kind stepKind) int {
 	ordinal := 0
-	for i, isStep := range stepRows(self.resolveDiffLines(diffLineContents(view)), withSpans) {
+	for i, isStep := range stepRows(self.resolveDiffLines(diffLineContents(view)), kind) {
 		if i >= bufferLine {
 			break
 		}
@@ -344,7 +379,7 @@ func (self *DiffLineHelper) StartOfEntityTarget(view *gocui.View, bufferLine int
 // render is coming to put it there, for a caller that must not let the user act again
 // in between.
 func (self *DiffLineHelper) RevealChangeLineAtOrdinal(
-	view *gocui.View, ordinal int, withSpans bool, place func(viewLine int), done func(),
+	view *gocui.View, ordinal int, kind stepKind, place func(viewLine int), done func(),
 ) {
 	// The rows the incremental search has read, and how many of their steps it has
 	// passed, so that it can carry on counting where it left off. A row is only judged
@@ -354,11 +389,17 @@ func (self *DiffLineHelper) RevealChangeLineAtOrdinal(
 
 	self.installDiffLineRestore(view,
 		func(rows []gocui.DiffLineContent, offset int) (int, bool) {
+			// Whether a row starts a change unit or an entity depends on rows far enough
+			// after it, such as those between an entity's header and its first unit,
+			// that a partly loaded diff may not have them. Those are left to the whole.
+			if kind >= stepUnits {
+				return 0, false
+			}
 			for _, row := range rows {
 				info, ok := self.diffLineInfoFromRecords(row.Metadata)
 				loaded = append(loaded, resolvedDiffLine{info, ok})
 			}
-			steps := stepRows(loaded, withSpans)
+			steps := stepRows(loaded, kind)
 			for ; judged < len(loaded)-1; judged++ {
 				if !steps[judged] {
 					continue
@@ -373,7 +414,7 @@ func (self *DiffLineHelper) RevealChangeLineAtOrdinal(
 		func(contents []gocui.DiffLineContent) (int, bool) {
 			resolved := self.resolveDiffLines(contents)
 			last, count := -1, 0
-			for i, isStep := range stepRows(resolved, withSpans) {
+			for i, isStep := range stepRows(resolved, kind) {
 				if !isStep {
 					continue
 				}
@@ -629,7 +670,8 @@ func (self *DiffLineHelper) RevealSelectionAfterAction(
 ) {
 	sel := source.DiffSelectState()
 	selectHunk := sel.Mode == types.DiffSelectModeHunk
-	ordinal := self.ChangeLineOrdinal(source.GetView(), firstBufferLine, !selectHunk)
+	kind := stepKindOf(sel, self.resolveDiffLines(diffLineContents(source.GetView())))
+	ordinal := self.ChangeLineOrdinal(source.GetView(), firstBufferLine, kind)
 
 	if sel.Mode == types.DiffSelectModeRange {
 		sel.Mode = types.DiffSelectModeLine
@@ -643,7 +685,7 @@ func (self *DiffLineHelper) RevealSelectionAfterAction(
 		self.c.Context().UpdateSelectionHighlights()
 	}
 
-	self.RevealChangeLineAtOrdinal(targetView, ordinal+advanceBy, !selectHunk, func(viewLine int) {
+	self.RevealChangeLineAtOrdinal(targetView, ordinal+advanceBy, kind, func(viewLine int) {
 		if selectHunk {
 			self.SelectChangeBlock(target, viewLine, true)
 			return

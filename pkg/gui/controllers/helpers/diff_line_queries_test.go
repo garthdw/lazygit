@@ -14,7 +14,7 @@ func TestChangeBlockStart(t *testing.T) {
 	//   6 -                               (block B)
 	//   7 context
 	//   8 +                               (block C)
-	isChange := []bool{false, false, false, true, true, false, true, false, true}
+	isChange := []int{-1, -1, -1, 0, 0, -1, 1, -1, 2}
 
 	scenarios := []struct {
 		name     string
@@ -46,6 +46,22 @@ func TestChangeBlockStart(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestChangeBlockStartBetweenAdjacentBlocks(t *testing.T) {
+	blocks := []int{0, 0, 1, 1, -1, 2}
+
+	got, found := changeBlockStart(blocks, 0, true)
+	assert.True(t, found)
+	assert.Equal(t, 2, got)
+
+	got, found = changeBlockStart(blocks, 3, false)
+	assert.True(t, found)
+	assert.Equal(t, 0, got)
+
+	got, found = changeBlockStart(blocks, 5, false)
+	assert.True(t, found)
+	assert.Equal(t, 2, got)
 }
 
 func TestFileStarts(t *testing.T) {

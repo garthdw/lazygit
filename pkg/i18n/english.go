@@ -337,6 +337,9 @@ type TranslationSet struct {
 	CommitsNotInPullRequest               string
 	CommitsInSeveralPullRequests          string
 	SelectLineByLine                      string
+	SelectModeLine                        string
+	SelectModeUnit                        string
+	SelectModeEntity                      string
 	ToggleSelectHunkTooltip               string
 	ToggleSelectionForPatch               string
 	RemoveSelectionFromPatch              string
@@ -1582,6 +1585,9 @@ func EnglishTranslationSet() *TranslationSet {
 		CommitsInSeveralPullRequests:         "These commits are not all in the same pull request",
 		SelectHunk:                           "Select hunks",
 		SelectLineByLine:                     "Select line-by-line",
+		SelectModeLine:                       "Selecting lines",
+		SelectModeUnit:                       "Selecting change units",
+		SelectModeEntity:                     "Selecting entities",
 		ToggleSelectHunkTooltip:              "Toggle line-by-line vs. hunk selection mode.",
 		ToggleSelectionForPatch:              `Toggle lines in patch`,
 		RemoveSelectionFromPatch:             `Remove lines from commit`,

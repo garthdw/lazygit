@@ -181,7 +181,7 @@ func (self *DiffLineHelper) SelectChangeBlock(
 	pane types.DiffPaneContext, changeViewLine int, scrollIntoView bool,
 ) {
 	view := pane.GetView()
-	start, end, ok := self.ChangeBlockBounds(view, changeViewLine)
+	start, end, ok := self.ChangeBlockBounds(view, changeViewLine, pane.DiffSelectState().BlocksByEntity)
 	if !ok {
 		pane.DiffSelectState().Mode = types.DiffSelectModeLine
 		view.CancelRangeSelect()
@@ -195,12 +195,12 @@ func (self *DiffLineHelper) SelectChangeBlock(
 // SelectedHunkBounds returns the change block selected in hunk mode. The range
 // anchor stays on the block's far end when a click moves the cursor before its
 // handler runs, so it still identifies the selected block.
-func (self *DiffLineHelper) SelectedHunkBounds(view *gocui.View) (int, int, bool) {
+func (self *DiffLineHelper) SelectedHunkBounds(view *gocui.View, byEntity bool) (int, int, bool) {
 	anchor := view.RangeSelectStartY()
 	if anchor < 0 {
 		return 0, 0, false
 	}
-	return self.ChangeBlockBounds(view, anchor)
+	return self.ChangeBlockBounds(view, anchor, byEntity)
 }
 
 // RefreshInclusionGutter updates the marks drawn over the diff in the main pane, which
@@ -271,4 +271,42 @@ func (self *DiffLineHelper) patchInclusion() func(types.DiffLineInfo) bool {
 // upper one.
 func (self *DiffLineHelper) ShowsCustomPatch(view *gocui.View) bool {
 	return view == self.c.Contexts().NormalSecondary.GetView() && self.patchInclusion() != nil
+}
+
+// HasEntityRecords reports whether the renderer of view's diff states the entities of its
+// rows, so that hunk mode selects change units and entities rather than runs of changes.
+func (self *DiffLineHelper) HasEntityRecords(view *gocui.View) bool {
+	return hasEntityRecords(self.resolveDiffLines(diffLineContents(view)))
+}
+
+// ExtendRangeByBlock grows the pane's selection to take in the block beyond its far end
+// in the given direction, so that it covers whole change blocks whichever way it is
+// grown. The selection only grows: the cursor is left at its top, and the anchor is at
+// its bottom.
+func (self *DiffLineHelper) ExtendRangeByBlock(pane types.DiffPaneContext, forward bool) {
+	view := pane.GetView()
+	sel := pane.DiffSelectState()
+	byEntity := sel.BlocksByEntity
+	top, bottom := view.SelectedLineRange()
+	sel.Mode = types.DiffSelectModeRange
+	sel.RangeIsSticky = false
+	sel.RangeByBlock = true
+
+	if forward {
+		next, ok := self.AdjacentChangeBlock(view, bottom, true, byEntity)
+		if !ok {
+			return
+		}
+		if _, end, ok := self.ChangeBlockBounds(view, next, byEntity); ok {
+			bottom = end
+		}
+	} else {
+		previous, ok := self.AdjacentChangeBlock(view, top, false, byEntity)
+		if !ok {
+			return
+		}
+		top = previous
+	}
+	view.SetRangeSelectStart(bottom)
+	self.ShowSelectionAtLine(view, top, true)
 }
