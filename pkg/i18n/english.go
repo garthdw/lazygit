@@ -350,6 +350,19 @@ type TranslationSet struct {
 	UnstageChangeUnit                     string
 	StageChangeUnitTooltip                string
 	NoEntityPatchCommand                  string
+	ShowConsumers                         string
+	ShowConsumersTooltip                  string
+	NoConsumersCommand                    string
+	ConsumersTitle                        string
+	FindingConsumers                      string
+	ConsumersCommandFailed                string
+	ConsumersCommandBadOutput             string
+	ConsumersChangeDepth                  string
+	ConsumersDepthAll                     string
+	NoConsumersFound                      string
+	ConsumersApproximate                  string
+	ConsumersIncomplete                   string
+	ConsumersIncompleteNoCallers          string
 	NoEntityAtSelection                   string
 	EntityPatchCommandFailed              string
 	ToggleDiffPane                        string
@@ -1595,6 +1608,19 @@ func EnglishTranslationSet() *TranslationSet {
 		UnstageChangeUnit:                    "Unstage change unit",
 		StageChangeUnitTooltip:               "Stage (or, on the staged side, unstage) the change units of the selected rows, as the diff renderer says; a row that belongs to no unit, such as an entity's header, stands for the whole entity.",
 		NoEntityPatchCommand:                 "The diff renderer has no entityPatchCommand",
+		ShowConsumers:                        "Show consumers",
+		ShowConsumersTooltip:                 "List what depends on the entity of the selected row, and the tests that reach it, as the diff renderer says. Enter opens one in the editor.",
+		NoConsumersCommand:                   "The diff renderer has no consumersCommand",
+		ConsumersTitle:                       "Consumers of {{.entity}} depth ≤ {{.depth}}",
+		FindingConsumers:                     "Finding consumers",
+		ConsumersCommandFailed:               "The consumersCommand failed: {{.error}}",
+		ConsumersCommandBadOutput:            "The consumersCommand didn't print the consumers as JSON: {{.error}}",
+		ConsumersChangeDepth:                 "Depth ≤ {{.depth}}, change to ≤ {{.next}}",
+		ConsumersDepthAll:                    "∞",
+		NoConsumersFound:                     "No consumers found",
+		ConsumersApproximate:                 "Approximate: these were found by name, and still reference {{.name}}",
+		ConsumersIncomplete:                  "INCOMPLETE · {{.count}} possible callers ({{.reasons}})",
+		ConsumersIncompleteNoCallers:         "INCOMPLETE ({{.reasons}})",
 		NoEntityAtSelection:                  "The diff renderer doesn't say which entity the selected rows belong to",
 		EntityPatchCommandFailed:             "The entityPatchCommand failed: {{.error}}",
 		ToggleDiffPane:                       "Switch diff pane",

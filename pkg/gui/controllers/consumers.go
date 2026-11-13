@@ -2,9 +2,17 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/jesseduffield/lazygit/pkg/config"
+	"github.com/jesseduffield/lazygit/pkg/gocui"
+	"github.com/jesseduffield/lazygit/pkg/gui/types"
+	"github.com/jesseduffield/lazygit/pkg/utils"
+	"github.com/samber/lo"
 )
 
 // consumersReport is the JSON that a diff renderer's consumersCommand prints. Fields
@@ -81,7 +89,7 @@ func (self consumersReport) confirmed() []consumerRow {
 	dependents := slices.Clone(self.Dependents)
 	slices.SortStableFunc(dependents, func(a, b consumersLocation) int { return a.Depth - b.Depth })
 
-	rows := []consumerRow{}
+	rows := make([]consumerRow, 0, len(dependents)+len(self.Tests))
 	for _, dependent := range dependents {
 		rows = append(rows, consumerRow{
 			Kind: fmt.Sprintf("d%d", dependent.Depth),
@@ -105,13 +113,13 @@ func (self consumersReport) confirmed() []consumerRow {
 // A caller with a single place that refers to the entity is opened at that place rather
 // than at the caller's own start.
 func (self consumersReport) possible() []consumerRow {
-	rows := []consumerRow{}
+	rows := make([]consumerRow, 0, len(self.PossibleCallers))
 	for _, caller := range self.PossibleCallers {
 		line := caller.Line
 		if len(caller.Sites) == 1 {
 			line = caller.Sites[0].Line
 		}
-		sites := []string{}
+		sites := make([]string, 0, len(caller.Sites))
 		for _, site := range caller.Sites {
 			sites = append(sites, fmt.Sprintf("%s at line %d", site.Kind, site.Line))
 		}
@@ -127,7 +135,7 @@ func (self consumersReport) possible() []consumerRow {
 }
 
 func (self consumersReport) incompleteReasons() string {
-	reasons := []string{}
+	reasons := make([]string, 0, len(self.IncompleteReasons))
 	for _, reason := range self.IncompleteReasons {
 		reasons = append(reasons, reason.Detail)
 	}
@@ -143,5 +151,149 @@ func nextConsumersDepth(depth int) int {
 		return 0
 	default:
 		return 1
+	}
+}
+
+// showConsumersDescription lists the key only under a renderer that can be asked for
+// consumers, so that it stays out of the way of everyone who has none; pressing the key
+// still says why it does nothing.
+func (self *MainViewController) showConsumersDescription() string {
+	if !self.c.State().GetDiffRendererConfigManager().HasConsumersCommand() {
+		return ""
+	}
+	return self.c.Tr.ShowConsumers
+}
+
+func (self *MainViewController) showConsumersDisabledReason() *types.DisabledReason {
+	if reason := self.diffSelectionDisabledReason(); reason != nil {
+		return reason
+	}
+	if !self.c.State().GetDiffRendererConfigManager().HasConsumersCommand() {
+		return &types.DisabledReason{Text: self.c.Tr.NoConsumersCommand}
+	}
+	return nil
+}
+
+// showConsumers opens the popup of what depends on the entity of the selected row, which
+// the diff renderer's own records name.
+func (self *MainViewController) showConsumers() error {
+	view := self.context.GetView()
+	selected := view.SelectedLineIdx()
+	infos := self.c.Helpers().DiffLine.DiffLinesInBufferRange(view, selected, selected)
+	info, found := lo.Find(infos, func(info types.DiffLineInfo) bool { return info.EntityID != "" })
+	if !found {
+		return errors.New(self.c.Tr.NoEntityAtSelection)
+	}
+
+	values := config.ConsumersValues{
+		Entity: info.EntityID,
+		Depth:  1,
+		Path:   repoRelativePath(self.c.Git().RepoPaths.WorktreePath(), info.Path),
+	}
+	return self.openConsumers(values)
+}
+
+// openConsumers runs the consumersCommand away from the UI thread, as it may take a
+// moment, and shows what it found. Changing the depth opens it again.
+func (self *MainViewController) openConsumers(values config.ConsumersValues) error {
+	command, err := self.c.State().GetDiffRendererConfigManager().GetConsumersCommand(values, self.c.OS().Quote)
+	if err != nil {
+		return err
+	}
+	if command == "" {
+		return errors.New(self.c.Tr.NoConsumersCommand)
+	}
+
+	return self.c.WithWaitingStatus(self.c.Tr.FindingConsumers, func(gocui.Task) error {
+		stdout, stderr, err := self.c.OS().Cmd.NewShell(command, "").RunWithOutputs()
+		if err != nil {
+			reason, _, _ := strings.Cut(strings.TrimSpace(stderr), "\n")
+			if reason == "" {
+				reason = err.Error()
+			}
+			return errors.New(utils.ResolvePlaceholderString(self.c.Tr.ConsumersCommandFailed,
+				map[string]string{"error": reason}))
+		}
+		report, err := parseConsumers(stdout)
+		if err != nil {
+			return errors.New(utils.ResolvePlaceholderString(self.c.Tr.ConsumersCommandBadOutput,
+				map[string]string{"error": err.Error()}))
+		}
+
+		self.c.OnUIThread(func() error {
+			return self.c.Menu(self.consumersMenu(report, values))
+		})
+		return nil
+	})
+}
+
+func (self *MainViewController) consumersMenu(report consumersReport, values config.ConsumersValues) types.CreateMenuOptions {
+	depth := func(depth int) string {
+		if depth == 0 {
+			return self.c.Tr.ConsumersDepthAll
+		}
+		return fmt.Sprint(depth)
+	}
+
+	jumpTo := func(row consumerRow) *types.MenuItem {
+		return &types.MenuItem{
+			LabelColumns: []string{row.Kind, row.Name, row.location()},
+			Tooltip:      row.Detail,
+			OnPress: func() error {
+				path := filepath.Join(self.c.Git().RepoPaths.WorktreePath(), filepath.FromSlash(row.File))
+				return self.c.Helpers().Files.EditFileAtLine(path, row.Line)
+			},
+		}
+	}
+
+	items := []*types.MenuItem{}
+	for _, row := range report.confirmed() {
+		items = append(items, jumpTo(row))
+	}
+	if len(items) == 0 {
+		items = append(items, &types.MenuItem{
+			Label:   self.c.Tr.NoConsumersFound,
+			OnPress: func() error { return nil },
+		})
+	}
+
+	var prompt string
+	if report.Basis == "textual" {
+		prompt = utils.ResolvePlaceholderString(self.c.Tr.ConsumersApproximate,
+			map[string]string{"name": report.Entity.Name})
+	}
+	if !report.Complete {
+		possible := report.possible()
+		reasons := map[string]string{"count": fmt.Sprint(len(possible)), "reasons": report.incompleteReasons()}
+		if len(possible) == 0 {
+			incomplete := utils.ResolvePlaceholderString(self.c.Tr.ConsumersIncompleteNoCallers, reasons)
+			prompt = strings.TrimSpace(prompt + "\n" + incomplete)
+		}
+		section := &types.MenuSection{Title: utils.ResolvePlaceholderString(self.c.Tr.ConsumersIncomplete, reasons)}
+		for _, row := range possible {
+			item := jumpTo(row)
+			item.Section = section
+			items = append(items, item)
+		}
+	}
+
+	next := nextConsumersDepth(values.Depth)
+	// In the last column, so that it doesn't widen the ones the rows are aligned in.
+	items = append(items, &types.MenuItem{
+		LabelColumns: []string{"", "", utils.ResolvePlaceholderString(self.c.Tr.ConsumersChangeDepth,
+			map[string]string{"depth": depth(values.Depth), "next": depth(next)})},
+		Keys: []gocui.Key{gocui.NewKeyRune('d')},
+		OnPress: func() error {
+			values.Depth = next
+			return self.openConsumers(values)
+		},
+	})
+
+	return types.CreateMenuOptions{
+		Title: utils.ResolvePlaceholderString(self.c.Tr.ConsumersTitle,
+			map[string]string{"entity": report.entityName(), "depth": depth(values.Depth)}),
+		Prompt:     prompt,
+		Items:      items,
+		HideCancel: true,
 	}
 }
