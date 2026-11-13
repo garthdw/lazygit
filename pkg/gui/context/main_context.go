@@ -45,6 +45,8 @@ func (self *MainContext) ResetDiffSelectMode() {
 	self.diffSelect.Mode = types.DiffSelectModeLine
 	self.diffSelect.RangeIsSticky = false
 	self.diffSelect.UserEnabledHunkMode = false
+	self.diffSelect.BlocksByEntity = false
+	self.diffSelect.RangeByBlock = false
 	self.GetView().CancelRangeSelect()
 }
 
