@@ -429,6 +429,21 @@ git:
   #   # applicable if the type is 'rawGit'.
   #   args: []
   #
+  #   # The command that prints the patch for staging or unstaging an entity
+  #   # or change unit that this renderer shows, for renderers that say which
+  #   # entity and unit each row belongs to (an OSC 1717 's' record). Its
+  #   # output is applied to the index with `git apply --cached`. Without it,
+  #   # the entity and unit staging commands are disabled for this renderer.
+  #   # It is a template; see the documentation linked below for the values
+  #   # it can refer to.
+  #   entityPatchCommand: ""
+  #
+  #   # The command that prints the consumers of an entity that this renderer
+  #   # shows, as JSON, for the consumers popup. Without it, the popup is
+  #   # disabled for this renderer. It is a template; see the documentation
+  #   # linked below for the values it can refer to and for the JSON.
+  #   consumersCommand: ""
+  #
   # See https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md
   # for more information.
   diffRenderers: []
@@ -876,6 +891,9 @@ keybinding:
     toggleSelectHunk: a
     pickBothHunks: b
     editSelectHunk: E
+    stageEntity: s
+    stageChangeUnit: u
+    showConsumers: i
   submodules:
     init: i
     update: u

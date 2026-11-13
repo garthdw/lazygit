@@ -36,6 +36,21 @@ func TestPatchLineIndicesForLines(t *testing.T) {
 	assert.True(t, everyChange, "the two changes are all the diff has")
 }
 
+// A span names every change line of its kind within its range, and a line named twice
+// is taken once.
+func TestPatchLineIndicesForLinesOfASpan(t *testing.T) {
+	patchBuilder := newTestPatchBuilder(simpleDiff)
+
+	indices, everyChange, err := patchBuilder.PatchLineIndicesForLines("filename", "", []LineIdentity{
+		{LineNumber: 1, LastLineNumber: 3, IsDeletion: false}, // +grape
+		{LineNumber: 1, LastLineNumber: 3, IsDeletion: true},  // -orange
+		{LineNumber: 2, IsDeletion: true},                     // -orange again
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []int{7, 6}, indices)
+	assert.True(t, everyChange)
+}
+
 // A renamed file's rename header makes its change lines sit further down the diff, and
 // its old-file line numbers are of the file under its previous name.
 func TestPatchLineIndicesForLinesOfARenamedFile(t *testing.T) {

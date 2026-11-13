@@ -126,6 +126,33 @@ func (self *MainViewController) GetKeybindings(opts types.KeybindingsOpts) []*ty
 			Tooltip:           self.c.Tr.EditHunkTooltip,
 		},
 		{
+			Keys:              opts.GetKeys(opts.Config.Main.StageEntity),
+			Handler:           self.stageByEntity(false),
+			Description:       self.c.Tr.StageEntity,
+			DescriptionFunc:   self.entityStagingDescription(self.c.Tr.StageEntity, self.c.Tr.UnstageEntity),
+			GetDisabledReason: self.entityStagingDisabledReason,
+			Tooltip:           self.c.Tr.StageEntityTooltip,
+			DisplayOnScreen:   true,
+		},
+		{
+			Keys:              opts.GetKeys(opts.Config.Main.StageChangeUnit),
+			Handler:           self.stageByEntity(true),
+			Description:       self.c.Tr.StageChangeUnit,
+			DescriptionFunc:   self.entityStagingDescription(self.c.Tr.StageChangeUnit, self.c.Tr.UnstageChangeUnit),
+			GetDisabledReason: self.entityStagingDisabledReason,
+			Tooltip:           self.c.Tr.StageChangeUnitTooltip,
+			DisplayOnScreen:   true,
+		},
+		{
+			Keys:              opts.GetKeys(opts.Config.Main.ShowConsumers),
+			Handler:           self.showConsumers,
+			Description:       self.c.Tr.ShowConsumers,
+			DescriptionFunc:   self.showConsumersDescription,
+			GetDisabledReason: self.showConsumersDisabledReason,
+			Tooltip:           self.c.Tr.ShowConsumersTooltip,
+			DisplayOnScreen:   true,
+		},
+		{
 			Keys:              opts.GetKeys(opts.Config.Universal.CopyToClipboard),
 			Handler:           self.copySelection,
 			Description:       self.c.Tr.CopySelectedDiffLinesToClipboard,
@@ -426,6 +453,52 @@ func (self *MainViewController) editHunk() error {
 		return nil
 	}
 	return actions.EditHunk(self.context, first, last)
+}
+
+// stageByEntity stages, or on the staged side unstages, the entities or change units
+// of the selected rows, as the diff renderer's own records say, and is only offered over
+// the working tree's diff, like editing a hunk.
+func (self *MainViewController) stageByEntity(byUnit bool) func() error {
+	return func() error {
+		actions, ok := self.diffSource().(*WorkingTreeDiffActions)
+		if !ok {
+			return nil
+		}
+		first, last, ok := self.context.GetView().SelectedBufferLineRange()
+		if !ok {
+			return nil
+		}
+		return actions.StageByEntity(self.context, first, last, byUnit)
+	}
+}
+
+// entityStagingDescription describes staging by entity in the words of the side of the
+// index that the pane shows. It is listed only over the working tree's diff, and only
+// under a renderer that can be asked for the patch of an entity, so that it stays out of
+// the way of everyone who has none; pressing the key still says why it does nothing.
+func (self *MainViewController) entityStagingDescription(stage string, unstage string) func() string {
+	return func() string {
+		if self.diffMainViewType() != types.DiffMainViewTypeStaging ||
+			!self.c.State().GetDiffRendererConfigManager().HasEntityPatchCommand() {
+			return ""
+		}
+		if self.context.GetKey() == self.c.Contexts().NormalSecondary.GetKey() {
+			return unstage
+		}
+		return stage
+	}
+}
+
+// entityStagingDisabledReason disables staging by entity where the renderer in use
+// can't be asked for the patch of one.
+func (self *MainViewController) entityStagingDisabledReason() *types.DisabledReason {
+	if reason := self.diffSelectionDisabledReason(); reason != nil {
+		return reason
+	}
+	if !self.c.State().GetDiffRendererConfigManager().HasEntityPatchCommand() {
+		return &types.DisabledReason{Text: self.c.Tr.NoEntityPatchCommand}
+	}
+	return nil
 }
 
 // workingTreeAction wraps a command that acts on the working tree — committing, finding

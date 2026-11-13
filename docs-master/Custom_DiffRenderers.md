@@ -70,6 +70,77 @@ git:
 
 An entry is named by its `name`, or failing that, by the first word of its command (or its first argument, for `rawGit`); if several have the same name, the first is used. If no entry has the name, or the named one doesn't speak the protocol either, git's own diff is shown as before.
 
+## Staging entities
+
+A renderer that understands the code it shows, such as semdiff, can state which entity (a function, a class) and which change unit of it each row belongs to, by adding an OSC 1717 `s` record to the row:
+
+```
+ESC ] 1717 ; 1;s;<unit>;<entity id>;<file> BEL
+```
+
+`<unit>` is the 1-based change unit, empty for a row outside every unit, such as the entity's header. `<entity id>` is percent-encoded. Such rows can be staged and unstaged as a whole in the focused main view of the files panel, with `stageEntity` (default `s`) for the entity of the selected row, and `stageChangeUnit` (default `u`) for its change unit: the units of every selected row, or the whole entity when the selected rows have no unit. On the staged side's diff they unstage instead. The two commands are listed only under a renderer that has an `entityPatchCommand`.
+
+lazygit doesn't know how to cut a patch out of an entity, so the renderer has to be asked, with `entityPatchCommand`. It must print a patch that `git apply --cached` can apply as it is; unstaging is asked for by the flags below, so the command prints the reversed patch itself, and lazygit never passes `--reverse` to git. A failing command (non-zero exit) is reported to the user with its error output. On success, every line it writes to stderr that starts with `warning: ` (for example `warning: usesIntroduced: formatPrice uses currency, which is not staged`) is shown in a toast once the patch is staged; other stderr lines are ignored. When the patch holds every change the file has on that side, lazygit stages or unstages the whole file instead of applying it, as it does for line staging, so that a new, deleted or renamed file is staged as what it is. The command is run in the repo's root, and the entity staging commands are disabled, with that as the reason, for renderers that don't have one.
+
+```yaml
+git:
+  diffRenderers:
+    - command: semdiff --pager --color=always --width={{width}}
+      colorArg: never
+      entityPatchCommand: >-
+        semdiff patch --entity {{entity}}
+        {{if units}}--unit {{units}}{{end}}
+        {{if staged}}--staged --reverse{{end}}
+        -- {{path}} {{oldPath}}
+```
+
+The command is run by a shell, so the text values are quoted for you; don't put quotes around them. The values are:
+
+| Value | Meaning |
+| --- | --- |
+| `{{entity}}` | The entity id, decoded |
+| `{{path}}` | The file's path, relative to the repo root |
+| `{{oldPath}}` | The path before a rename, only when unstaging a staged rename (the renderer needs both paths then); empty otherwise |
+| `{{units}}` | The unit numbers, separated by spaces; empty to stage the whole entity |
+| `{{staged}}`, `{{reverse}}` | True when unstaging (both are the same), false when staging |
+
+## Showing the consumers of an entity
+
+A renderer that says which entity each row belongs to (see above) can also be asked what depends on it, with `consumersCommand`. It must print JSON, described below, on stdout. A failing command (non-zero exit) is reported to the user with the first line of its error output. The command is run in the repo's root, and the consumers popup is disabled, with that as the reason, for renderers that don't have one.
+
+```yaml
+git:
+  diffRenderers:
+    - command: semdiff --pager --color=always --width={{width}}
+      colorArg: never
+      consumersCommand: semdiff impact --entity {{entity}} --depth {{depth}} --json
+```
+
+The command is run by a shell, so the text values are quoted for you; don't put quotes around them. The values are:
+
+| Value | Meaning |
+| --- | --- |
+| `{{entity}}` | The entity id of the selected row, decoded |
+| `{{path}}` | The file of the selected row, relative to the repo root |
+| `{{depth}}` | How many steps of dependents to list: 1 when the popup opens, then 2, then 0 for all of them, as `d` cycles them |
+
+The JSON has these fields; any others are ignored:
+
+```
+{ "schemaVersion": 1,
+  "entity": { "name", "breadcrumb": [...] },
+  "basis": "graph" | "textual",
+  "complete": true | false,
+  "incompleteReasons": [ { "detail" } ],
+  "dependents": [ { "breadcrumb": [...], "file", "line", "depth" } ],
+  "tests": [ { "breadcrumb": [...], "file", "line" } ],
+  "possibleCallers": [ { "name", "file", "line", "sites": [ { "kind", "line" } ] } ] }
+```
+
+Each `breadcrumb` starts with the file, which the popup leaves out. A `basis` of `textual` says that the dependents were found by name rather than by what the code refers to, and the popup says it is approximate. When `complete` is false, the `possibleCallers` are listed under a heading of their own: they may or may not be consumers. `file` is relative to the repo root and `line` is 1-based.
+
+The popup is opened with `showConsumers` (default `i`) in the focused main view, on a row that has an `s` record. `enter` opens the file of the selected row in the editor at its line, like `edit` does, and `d` lists the dependents of another depth.
+
 ## Delta:
 
 ```yaml

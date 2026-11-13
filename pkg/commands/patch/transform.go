@@ -181,8 +181,13 @@ func (self *patchTransformer) transformHunkLines(hunk *Hunk, firstLineIdx int) [
 	// current change block, the selected addition comes "later" in the block. In
 	// that case the pending context (from unselected deletions before it) must be
 	// flushed first so those context lines appear before the addition in the output.
+	// Exception to the exception: if a selected old-file line has been seen earlier
+	// in the block, the selected addition belongs to it (they are a span's deletion
+	// and addition), so it must directly follow it. The pending context then comes
+	// from deletions after that one and stays behind the addition.
 	pendingContext := []*PatchLine{}
 	didSeeUnselectedNewFileLine := false
+	didSeeSelectedOldFileLine := false
 
 	flushPendingContext := func() {
 		newLines = append(newLines, pendingContext...)
@@ -199,6 +204,7 @@ func (self *patchTransformer) transformHunkLines(hunk *Hunk, firstLineIdx int) [
 		if line.Kind == CONTEXT {
 			flushPendingContext()
 			didSeeUnselectedNewFileLine = false
+			didSeeSelectedOldFileLine = false
 			newLines = append(newLines, line)
 			continue
 		}
@@ -222,8 +228,11 @@ func (self *patchTransformer) transformHunkLines(hunk *Hunk, firstLineIdx int) [
 				// this selected addition comes after them positionally. Flush pending
 				// context first so the unselected deletion context lines appear before
 				// this addition rather than after it.
-				didSeeUnselectedNewFileLine {
+				(didSeeUnselectedNewFileLine && !didSeeSelectedOldFileLine) {
 				flushPendingContext()
+			}
+			if isOldFileLine {
+				didSeeSelectedOldFileLine = true
 			}
 			newLines = append(newLines, line)
 			continue

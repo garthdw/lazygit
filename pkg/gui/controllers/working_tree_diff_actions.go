@@ -1,15 +1,19 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jesseduffield/generics/set"
 	"github.com/jesseduffield/lazygit/pkg/commands/git_commands"
 	"github.com/jesseduffield/lazygit/pkg/commands/models"
 	"github.com/jesseduffield/lazygit/pkg/commands/patch"
+	"github.com/jesseduffield/lazygit/pkg/config"
 	"github.com/jesseduffield/lazygit/pkg/gui/context"
 	"github.com/jesseduffield/lazygit/pkg/gui/types"
+	"github.com/jesseduffield/lazygit/pkg/utils"
 	"github.com/samber/lo"
 )
 
@@ -134,7 +138,7 @@ func (self *WorkingTreeDiffActions) EditHunk(
 
 	parsedPatch := patch.Parse(self.c.Git().WorkingTree.WorktreeFileDiff(file, git_commands.DiffModePlain, onStagedSide))
 	lineIndices := patch.ChangeLineIndicesForLines(parsedPatch,
-		[]patch.LineIdentity{linesByFile[0].lines[0].PatchLineIdentity()})
+		linesByFile[0].lines[0].PatchLineIdentities())
 	if len(lineIndices) == 0 {
 		return diffLinesNotFoundError(self.c, file.GetPath())
 	}
@@ -191,6 +195,164 @@ func (self *WorkingTreeDiffActions) EditHunk(
 	// about to be rebuilt from a file that no longer looks the way it did.
 	self.c.RefreshBlockingInput(types.RefreshOptions{Scope: []types.RefreshableView{types.FILES}})
 	return nil
+}
+
+// entityTarget is what staging by entity acts on in one file: an entity, and the change
+// units of it, none standing for all of it.
+type entityTarget struct {
+	path     string
+	entityID string
+	units    []int
+}
+
+// entityTargets reads what the selected rows say about the entities they belong to, in
+// the order the diff shows them.
+//
+// Staging an entity is staging every entity a selected row belongs to. Staging a change
+// unit is staging the units the selected rows are in; a row that is in none (an entity's
+// header, a row standing for a whole added, deleted or collapsed entity) stands for
+// the whole entity unless units are selected with it, and a context row between units
+// stands for nothing.
+func entityTargets(infos []types.DiffLineInfo, byUnit bool) []entityTarget {
+	type key struct{ path, entityID string }
+	var order []key
+	units := map[key][]int{}
+	wholeEntity := map[key]bool{}
+	for _, info := range infos {
+		if info.EntityID == "" {
+			continue
+		}
+		entity := key{info.Path, info.EntityID}
+		if _, seen := units[entity]; !seen {
+			order = append(order, entity)
+			units[entity] = nil
+		}
+		switch {
+		case !byUnit:
+			wholeEntity[entity] = true
+		case info.Unit > 0:
+			units[entity] = append(units[entity], info.Unit)
+		case info.Type != types.DiffLineContext:
+			wholeEntity[entity] = true
+		}
+	}
+
+	targets := []entityTarget{}
+	for _, entity := range order {
+		selectedUnits := units[entity]
+		slices.Sort(selectedUnits)
+		selectedUnits = slices.Compact(selectedUnits)
+		if len(selectedUnits) == 0 && !wholeEntity[entity] {
+			continue
+		}
+		targets = append(targets, entityTarget{path: entity.path, entityID: entity.entityID, units: selectedUnits})
+	}
+	return targets
+}
+
+// StageByEntity stages the entities or change units that the selected rows belong to,
+// or on the staged side takes them out of the index, by asking the diff renderer for
+// the patch that does it and applying that to the index. The renderer, not git's diff,
+// knows where an entity begins and ends.
+//
+// Each patch is asked for after the one before it has been applied: what the renderer
+// numbers and names is read from the index as it then is.
+func (self *WorkingTreeDiffActions) StageByEntity(
+	pane types.DiffPaneContext, firstBufferLine int, lastBufferLine int, byUnit bool,
+) error {
+	infos := self.c.Helpers().DiffLine.DiffLinesInBufferRange(pane.GetView(), firstBufferLine, lastBufferLine)
+	targets := entityTargets(infos, byUnit)
+	if len(targets) == 0 {
+		return errors.New(self.c.Tr.NoEntityAtSelection)
+	}
+
+	onStagedSide := self.showsStagedSide(pane)
+	acted := set.New[string]()
+	warnings := []string{}
+	self.c.LogAction(self.c.Tr.Actions.ApplyPatch)
+	for _, target := range targets {
+		file := self.fileForDiffLinePath(target.path)
+		if file == nil {
+			return diffLinesFileNotFoundError(self.c, target.path)
+		}
+
+		values := config.EntityPatchValues{
+			Entity:  target.entityID,
+			Units:   target.units,
+			Path:    file.GetPath(),
+			Unstage: onStagedSide,
+		}
+		if onStagedSide {
+			values.OldPath = file.GetPreviousPath()
+		}
+		patchText, patchWarnings, err := self.entityPatch(values)
+		if err != nil {
+			return err
+		}
+		warnings = append(warnings, patchWarnings...)
+
+		// A patch of every change the file has on this side is the file staged (or
+		// unstaged) as a whole, which is not the same as applying its diff: a new or
+		// deleted file, a rename, would be put into the index as content rather than as
+		// what it is.
+		opts := git_commands.ApplyPatchOpts{Reverse: onStagedSide, Cached: true}
+		diffText := self.c.Git().WorkingTree.WorktreeFileDiff(file, git_commands.DiffModePlain, onStagedSide)
+		if changeLineCount(patch.Parse(patchText)) >= changeLineCount(patch.Parse(diffText)) {
+			err = self.applyDiffLinesPatch(diffLinesPatch{file: file, wholeFile: true}, opts)
+		} else {
+			err = self.c.Git().Patch.ApplyPatch(patchText, git_commands.ApplyPatchOpts{Cached: true})
+		}
+		if err != nil {
+			return err
+		}
+		acted.Add(file.GetPath())
+	}
+
+	actedSideRemains := lo.SomeBy(acted.ToSlice(), func(path string) bool {
+		file := self.context().FileTreeViewModel.GetFile(path)
+		return file != nil && self.c.Git().WorkingTree.WorktreeFileDiff(file, git_commands.DiffModePlain, onStagedSide) != ""
+	}) || self.anyFileHasChangesOnSide(acted, onStagedSide)
+
+	// The patch went to the index, so the other side has it now. The unit or entity is
+	// gone from the first row of it, which may be above the selected one.
+	startBufferLine := self.c.Helpers().DiffLine.StartOfEntityTarget(pane.GetView(), firstBufferLine, byUnit)
+	self.revealSelectionInPaneItLandsIn(pane, startBufferLine, actedSideRemains, true)
+	self.c.RefreshBlockingInput(types.RefreshOptions{Scope: []types.RefreshableView{types.FILES}})
+	if len(warnings) > 0 {
+		self.c.Toast(strings.Join(lo.Uniq(warnings), "\n"))
+	}
+	return nil
+}
+
+// entityPatchWarningPrefix starts each line the entityPatchCommand writes to stderr, on
+// success, to warn about what it has put together; other lines are not warnings.
+const entityPatchWarningPrefix = "warning: "
+
+// entityPatch runs the current diff renderer's entityPatchCommand and returns the patch
+// it prints, and the warnings it gave with it. A command that fails is reported with
+// what it says about it.
+func (self *WorkingTreeDiffActions) entityPatch(values config.EntityPatchValues) (string, []string, error) {
+	command, err := self.c.State().GetDiffRendererConfigManager().GetEntityPatchCommand(values, self.c.OS().Quote)
+	if err != nil {
+		return "", nil, err
+	}
+	if command == "" {
+		return "", nil, errors.New(self.c.Tr.NoEntityPatchCommand)
+	}
+
+	stdout, stderr, err := self.c.OS().Cmd.NewShell(command, "").RunWithOutputs()
+	if err != nil {
+		reason := strings.TrimSpace(stderr)
+		if reason == "" {
+			reason = err.Error()
+		}
+		return "", nil, errors.New(utils.ResolvePlaceholderString(self.c.Tr.EntityPatchCommandFailed,
+			map[string]string{"error": reason}))
+	}
+	warnings := lo.FilterMap(strings.Split(stderr, "\n"), func(line string, _ int) (string, bool) {
+		return strings.CutPrefix(strings.TrimSpace(line), entityPatchWarningPrefix)
+	})
+	return stdout, warnings, nil
 }
 
 // PatchInclusion is nil: a custom patch is built from a commit's diff, never from the
@@ -338,8 +500,8 @@ func (self *WorkingTreeDiffActions) buildDiffLinesPatch(
 	parsedPatch := patch.Parse(self.c.Git().WorkingTree.WorktreeFileDiff(file, git_commands.DiffModePlain, sourceCached))
 
 	patchLineIndices := patch.ChangeLineIndicesForLines(parsedPatch,
-		lo.Map(infos, func(info types.DiffLineInfo, _ int) patch.LineIdentity {
-			return info.PatchLineIdentity()
+		lo.FlatMap(infos, func(info types.DiffLineInfo, _ int) []patch.LineIdentity {
+			return info.PatchLineIdentities()
 		}))
 	if len(patchLineIndices) == 0 {
 		return diffLinesPatch{}, diffLinesNotFoundError(self.c, file.GetPath())

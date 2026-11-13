@@ -418,6 +418,15 @@ func TestParseDiffLineMetadata(t *testing.T) {
 		// it in anyway is taken at its word rather than rejected.
 		{"file header with a line number", "1;f;10;;foo.txt", parsedDiffLine{Path: "foo.txt", Type: types.DiffLineFileHeader, NewLine: 10}, true},
 
+		// A span stands for every change line within its ranges: additions by the
+		// new file's lines, deletions by the old file's. Either side may be empty.
+		{"span", "1;e;4-8;3-6;foo.txt", parsedDiffLine{Path: "foo.txt", Type: types.DiffLineSpan, NewLine: 4, NewEnd: 8, OldLine: 3, OldEnd: 6}, true},
+		{"span of an added entity", "1;e;4-8;;foo.txt", parsedDiffLine{Path: "foo.txt", Type: types.DiffLineSpan, NewLine: 4, NewEnd: 8}, true},
+		{"span of a deleted entity", "1;e;;3-6;foo.txt", parsedDiffLine{Path: "foo.txt", Type: types.DiffLineSpan, OldLine: 3, OldEnd: 6}, true},
+		{"span of nothing", "1;e;;;foo.txt", parsedDiffLine{}, false},
+		{"span without an end", "1;e;4;;foo.txt", parsedDiffLine{}, false},
+		{"span ending before it starts", "1;e;8-4;;foo.txt", parsedDiffLine{}, false},
+
 		{"unknown version", "2;c;1;;foo.txt", parsedDiffLine{}, false},
 		{"unknown type", "1;x;1;;foo.txt", parsedDiffLine{}, false},
 		{"too few fields", "1;c;1", parsedDiffLine{}, false},
@@ -433,6 +442,37 @@ func TestParseDiffLineMetadata(t *testing.T) {
 	for _, s := range scenarios {
 		t.Run(s.name, func(t *testing.T) {
 			result, ok := parseDiffLineMetadata(s.payload)
+			assert.Equal(t, s.expectOk, ok)
+			if s.expectOk {
+				assert.Equal(t, s.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseEntityMetadata(t *testing.T) {
+	scenarios := []struct {
+		name     string
+		payload  string
+		expected entityRecord
+		expectOk bool
+	}{
+		{"a row of a unit", "1;s;2;src/cart.ts::class::Cart::addItem;src/cart.ts", entityRecord{id: "src/cart.ts::class::Cart::addItem", unit: 2, path: "src/cart.ts"}, true},
+		{"a row outside every unit", "1;s;;src/cart.ts::function::total;src/cart.ts", entityRecord{id: "src/cart.ts::function::total", path: "src/cart.ts"}, true},
+		{"the id is percent-decoded", "1;s;;a.ts::function::f%3Bx%25%C3%A9;a.ts", entityRecord{id: "a.ts::function::f;x%\u00e9", path: "a.ts"}, true},
+		{"a path containing a semicolon", "1;s;1;a.ts::function::f;dir;a.ts", entityRecord{id: "a.ts::function::f", unit: 1, path: "dir;a.ts"}, true},
+		{"a unit of zero", "1;s;0;a.ts::function::f;a.ts", entityRecord{}, false},
+		{"a unit that is no number", "1;s;x;a.ts::function::f;a.ts", entityRecord{}, false},
+		{"no entity", "1;s;1;;a.ts", entityRecord{}, false},
+		{"a malformed escape", "1;s;;a%zz;a.ts", entityRecord{}, false},
+		{"too few fields", "1;s;1;a.ts::function::f", entityRecord{}, false},
+		{"unknown version", "2;s;1;a.ts::function::f;a.ts", entityRecord{}, false},
+		{"another type", "1;c;1;;a.ts", entityRecord{}, false},
+	}
+
+	for _, s := range scenarios {
+		t.Run(s.name, func(t *testing.T) {
+			result, ok := parseEntityMetadata(s.payload)
 			assert.Equal(t, s.expectOk, ok)
 			if s.expectOk {
 				assert.Equal(t, s.expected, result)
@@ -527,6 +567,24 @@ func TestParseDiffLineIdentities(t *testing.T) {
 				{Path: "file1", Type: types.DiffLineDeleted, NewLine: 2, OldLine: 2},
 				{Path: "file1", Type: types.DiffLineAdded, NewLine: 2},
 			},
+		}, parseDiffLineIdentities(contents))
+	})
+
+	t.Run("an entity record is put on the lines of its row", func(t *testing.T) {
+		contents := []gocui.DiffLineContent{
+			row("addItem", "1;s;;a.ts::function::addItem;a.ts", "1;e;3-4;3-4;a.ts"),
+			row("-three", "1;s;1;a.ts::function::addItem;a.ts", "1;d;3;3;a.ts"),
+			row("+THREE", "1;s;1;a.ts::function::addItem;a.ts", "1;a;3;;a.ts"),
+			row("divider", "1;s;1;a.ts::function::addItem;a.ts"),
+			row("elsewhere", "1;s;2;b.ts::function::f;b.ts", "1;c;1;;a.ts"),
+		}
+
+		assert.Equal(t, [][]parsedDiffLine{
+			{{Path: "a.ts", Type: types.DiffLineSpan, NewLine: 3, NewEnd: 4, OldLine: 3, OldEnd: 4, EntityID: "a.ts::function::addItem"}},
+			{{Path: "a.ts", Type: types.DiffLineDeleted, NewLine: 3, OldLine: 3, EntityID: "a.ts::function::addItem", Unit: 1}},
+			{{Path: "a.ts", Type: types.DiffLineAdded, NewLine: 3, EntityID: "a.ts::function::addItem", Unit: 1}},
+			nil,
+			{{Path: "a.ts", Type: types.DiffLineContext, NewLine: 1}},
 		}, parseDiffLineIdentities(contents))
 	})
 

@@ -318,6 +318,21 @@ type GitConfig struct {
 	//   # applicable if the type is 'rawGit'.
 	//   args: []
 	//
+	//   # The command that prints the patch for staging or unstaging an entity
+	//   # or change unit that this renderer shows, for renderers that say which
+	//   # entity and unit each row belongs to (an OSC 1717 's' record). Its
+	//   # output is applied to the index with `git apply --cached`. Without it,
+	//   # the entity and unit staging commands are disabled for this renderer.
+	//   # It is a template; see the documentation linked below for the values
+	//   # it can refer to.
+	//   entityPatchCommand: ""
+	//
+	//   # The command that prints the consumers of an entity that this renderer
+	//   # shows, as JSON, for the consumers popup. Without it, the popup is
+	//   # disabled for this renderer. It is a template; see the documentation
+	//   # linked below for the values it can refer to and for the JSON.
+	//   consumersCommand: ""
+	//
 	// See https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md for more information.
 	DiffRenderers []DiffRendererConfig `yaml:"diffRenderers"`
 	// The name of an entry of diffRenderers to render a diff with while the main view is focused for staging, when the renderer you are browsing with doesn't say which line of which file each row shows. An entry is named by its `name`, or failing that, by the first word of its command (or its first argument, for 'rawGit').
@@ -410,6 +425,12 @@ type DiffRendererConfig struct {
 	Command DiffRendererCommandType `yaml:"command"`
 	// Extra arguments (array of strings) passed to the git command. Only applicable if the type is 'rawGit'.
 	Args []string `yaml:"args"`
+	// The command that prints the patch for staging (or unstaging) an entity or change unit that this renderer shows, for renderers that say which entity and unit each row belongs to (an OSC 1717 's' record). Its output is applied to the index with `git apply --cached`. Without it, the entity and unit staging commands are disabled for this renderer.
+	// It is a template; see https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md#staging-entities for the values it can refer to.
+	EntityPatchCommand string `yaml:"entityPatchCommand"`
+	// The command that prints the consumers of an entity that this renderer shows, as JSON, for the consumers popup. Without it, the popup is disabled for this renderer.
+	// It is a template; see https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md#showing-the-consumers-of-an-entity for the values it can refer to and for the JSON.
+	ConsumersCommand string `yaml:"consumersCommand"`
 }
 
 type CommitConfig struct {
@@ -688,6 +709,9 @@ type KeybindingMainConfig struct {
 	ToggleSelectHunk Keybinding `yaml:"toggleSelectHunk"`
 	PickBothHunks    Keybinding `yaml:"pickBothHunks"`
 	EditSelectHunk   Keybinding `yaml:"editSelectHunk"`
+	StageEntity      Keybinding `yaml:"stageEntity"`
+	StageChangeUnit  Keybinding `yaml:"stageChangeUnit"`
+	ShowConsumers    Keybinding `yaml:"showConsumers"`
 }
 
 type KeybindingSubmodulesConfig struct {
@@ -1202,6 +1226,9 @@ func GetDefaultConfigForPlatform(platform string) *UserConfig {
 				ToggleSelectHunk: Keybinding{"a"},
 				PickBothHunks:    Keybinding{"b"},
 				EditSelectHunk:   Keybinding{"E"},
+				StageEntity:      Keybinding{"s"},
+				StageChangeUnit:  Keybinding{"u"},
+				ShowConsumers:    Keybinding{"i"},
 			},
 			Submodules: KeybindingSubmodulesConfig{
 				Init:     Keybinding{"i"},
