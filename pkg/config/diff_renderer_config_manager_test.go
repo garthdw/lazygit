@@ -323,3 +323,68 @@ func TestGetEntityPatchCommand(t *testing.T) {
 		assert.False(t, manager.HasEntityPatchCommand())
 	})
 }
+
+func TestGetConsumersCommand(t *testing.T) {
+	const command = `semdiff impact --entity {{entity}} --depth {{depth}} --json -- {{path}}`
+	quote := func(text string) string { return "'" + text + "'" }
+
+	scenarios := []struct {
+		name     string
+		command  string
+		values   ConsumersValues
+		expected string
+		hasError bool
+	}{
+		{
+			name:     "the text values are quoted and the depth is not",
+			command:  command,
+			values:   ConsumersValues{Entity: "src/a.ts::function::f;1", Depth: 2, Path: "src/a b.ts"},
+			expected: `semdiff impact --entity 'src/a.ts::function::f;1' --depth 2 --json -- 'src/a b.ts'`,
+		},
+		{
+			name:     "no depth means all of them",
+			command:  command,
+			values:   ConsumersValues{Entity: "e", Path: "p"},
+			expected: `semdiff impact --entity 'e' --depth 0 --json -- 'p'`,
+		},
+		{
+			name:     "the values can be written with a leading dot",
+			command:  `c {{.entity}} {{.depth}}`,
+			values:   ConsumersValues{Entity: "e", Depth: 1},
+			expected: `c 'e' 1`,
+		},
+		{
+			name:     "an unknown variable is an error",
+			command:  `c {{nope}}`,
+			hasError: true,
+		},
+	}
+
+	for _, s := range scenarios {
+		t.Run(s.name, func(t *testing.T) {
+			userConfig := &UserConfig{}
+			userConfig.Git.DiffRenderers = []DiffRendererConfig{{Command: "semdiff --pager", ConsumersCommand: s.command}}
+			manager := NewDiffRendererConfigManager(func() *UserConfig { return userConfig })
+
+			assert.True(t, manager.HasConsumersCommand())
+			result, err := manager.GetConsumersCommand(s.values, quote)
+			if s.hasError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, s.expected, result)
+		})
+	}
+
+	t.Run("a renderer without the command has none", func(t *testing.T) {
+		userConfig := &UserConfig{}
+		userConfig.Git.DiffRenderers = []DiffRendererConfig{{Command: "delta", EntityPatchCommand: "x"}}
+		manager := NewDiffRendererConfigManager(func() *UserConfig { return userConfig })
+
+		assert.False(t, manager.HasConsumersCommand())
+		result, err := manager.GetConsumersCommand(ConsumersValues{}, quote)
+		assert.NoError(t, err)
+		assert.Equal(t, "", result)
+	})
+}

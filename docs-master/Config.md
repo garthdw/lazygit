@@ -438,6 +438,12 @@ git:
   #   # it can refer to.
   #   entityPatchCommand: ""
   #
+  #   # The command that prints the consumers of an entity that this renderer
+  #   # shows, as JSON, for the consumers popup. Without it, the popup is
+  #   # disabled for this renderer. It is a template; see the documentation
+  #   # linked below for the values it can refer to and for the JSON.
+  #   consumersCommand: ""
+  #
   # See https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md
   # for more information.
   diffRenderers: []
@@ -875,6 +881,7 @@ keybinding:
     editSelectHunk: E
     stageEntity: s
     stageChangeUnit: u
+    showConsumers: i
   submodules:
     init: i
     update: u

@@ -190,6 +190,37 @@ func (self *DiffRendererConfigManager) GetEntityPatchCommand(values EntityPatchV
 	return resolveRendererTemplate("entityPatchCommand", currentDiffRendererConfig.EntityPatchCommand, variables)
 }
 
+// ConsumersValues are what the consumersCommand of a diff renderer can refer to.
+type ConsumersValues struct {
+	Entity string
+	// How many steps of dependents to list; 0 lists all of them.
+	Depth int
+	Path  string
+}
+
+// HasConsumersCommand reports whether the current renderer can be asked for the
+// consumers of an entity.
+func (self *DiffRendererConfigManager) HasConsumersCommand() bool {
+	currentDiffRendererConfig := self.currentDiffRendererConfig()
+	return currentDiffRendererConfig != nil && strings.TrimSpace(currentDiffRendererConfig.ConsumersCommand) != ""
+}
+
+// GetConsumersCommand resolves the current renderer's consumersCommand, a Go template
+// like the entityPatchCommand, whose text values are quoted the same way.
+func (self *DiffRendererConfigManager) GetConsumersCommand(values ConsumersValues, quote func(string) string) (string, error) {
+	if !self.HasConsumersCommand() {
+		return "", nil
+	}
+	currentDiffRendererConfig := self.currentDiffRendererConfig()
+
+	variables := map[string]any{
+		"entity": quote(values.Entity),
+		"depth":  strconv.Itoa(values.Depth),
+		"path":   quote(values.Path),
+	}
+	return resolveRendererTemplate("consumersCommand", currentDiffRendererConfig.ConsumersCommand, variables)
+}
+
 func (self *DiffRendererConfigManager) GetRawGitArgs() []string {
 	currentDiffRendererConfig := self.currentDiffRendererConfig()
 	if currentDiffRendererConfig == nil || currentDiffRendererConfig.getType() != DiffRendererType_RawGit {
