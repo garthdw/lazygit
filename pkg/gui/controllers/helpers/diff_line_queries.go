@@ -1,7 +1,9 @@
 package helpers
 
 import (
+	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/jesseduffield/lazygit/pkg/gocui"
@@ -189,15 +191,15 @@ func (self *DiffLineHelper) FirstChangeBlockInView(view *gocui.View) (int, bool)
 		return 0, false
 	}
 
-	isChange := self.changeLines(view)
-	for i := top; i <= min(bottom, len(isChange)-1); i++ {
-		if isChange[i] && (i == 0 || !isChange[i-1]) {
+	blocks := self.changeBlocks(view, false)
+	for i := top; i <= min(bottom, len(blocks)-1); i++ {
+		if blocks[i] >= 0 && (i == 0 || blocks[i-1] != blocks[i]) {
 			return view.ViewLineForBufferLine(i)
 		}
 	}
 	// A block covering the top line is one that began above it: nothing else can put a
 	// change there once no block starts on screen.
-	if top < len(isChange) && isChange[top] {
+	if top < len(blocks) && blocks[top] >= 0 {
 		return view.ViewLineForBufferLine(top)
 	}
 	return 0, false
@@ -285,29 +287,29 @@ func (self *DiffLineHelper) IsSingleHunkForWholeFile(view *gocui.View, changeVie
 // the first at or below it, or — with nothing below, the cursor sitting past the last
 // change — the nearest above, so that hunk mode always has a block to select. ok is
 // false only when the diff holds no change line at all.
-func (self *DiffLineHelper) ChangeBlockBounds(view *gocui.View, anchorViewLine int) (int, int, bool) {
+func (self *DiffLineHelper) ChangeBlockBounds(view *gocui.View, anchorViewLine int, byEntity bool) (int, int, bool) {
 	anchor, ok := view.BufferLineForViewLine(anchorViewLine)
 	if !ok {
 		return 0, 0, false
 	}
 
-	isChange := self.changeLines(view)
+	blocks := self.changeBlocks(view, byEntity)
 	start := anchor
-	for start < len(isChange) && !isChange[start] {
+	for start < len(blocks) && blocks[start] < 0 {
 		start++
 	}
-	if start >= len(isChange) {
-		for start = min(anchor, len(isChange)-1); start >= 0 && !isChange[start]; start-- {
+	if start >= len(blocks) {
+		for start = min(anchor, len(blocks)-1); start >= 0 && blocks[start] < 0; start-- {
 		}
 		if start < 0 {
 			return 0, 0, false
 		}
 	}
 	end := start
-	for start > 0 && isChange[start-1] {
+	for start > 0 && blocks[start-1] == blocks[start] {
 		start--
 	}
-	for end < len(isChange)-1 && isChange[end+1] {
+	for end < len(blocks)-1 && blocks[end+1] == blocks[end] {
 		end++
 	}
 
@@ -327,13 +329,15 @@ func (self *DiffLineHelper) ChangeBlockBounds(view *gocui.View, anchorViewLine i
 // of the next block, forward=false the start of the previous one — from mid-block that
 // means the previous block, rather than the one we are in. ok is false when there's no
 // further block, so the caller leaves the view where it is.
-func (self *DiffLineHelper) AdjacentChangeBlock(view *gocui.View, anchorViewLine int, forward bool) (int, bool) {
+func (self *DiffLineHelper) AdjacentChangeBlock(
+	view *gocui.View, anchorViewLine int, forward bool, byEntity bool,
+) (int, bool) {
 	anchor, ok := view.BufferLineForViewLine(anchorViewLine)
 	if !ok {
 		return 0, false
 	}
 
-	target, ok := changeBlockStart(self.changeLines(view), anchor, forward)
+	target, ok := changeBlockStart(self.changeBlocks(view, byEntity), anchor, forward)
 	if !ok {
 		return 0, false
 	}
@@ -475,40 +479,173 @@ func anchorFilePath(paths []string, from int) (string, bool) {
 	return "", false
 }
 
-// changeBlockStart finds, in a diff whose lines are flagged by isChange, the first
-// line of the change block adjacent to `from` in the given direction. It is the pure
-// index arithmetic behind AdjacentChangeBlock.
-func changeBlockStart(isChange []bool, from int, forward bool) (int, bool) {
-	if from < 0 || from >= len(isChange) {
+// changeBlockStart finds, in a diff whose lines are flagged by the change block they are
+// in (see changeBlocks), the first line of the change block adjacent to `from` in the
+// given direction. It is the pure index arithmetic behind AdjacentChangeBlock.
+func changeBlockStart(blocks []int, from int, forward bool) (int, bool) {
+	if from < 0 || from >= len(blocks) {
 		return 0, false
 	}
 
+	current := blocks[from]
 	if forward {
 		i := from
-		for i < len(isChange) && isChange[i] { // leave the current block
+		for i < len(blocks) && current >= 0 && blocks[i] == current { // leave the current block
 			i++
 		}
-		for i < len(isChange) && !isChange[i] { // skip the separating context
+		for i < len(blocks) && blocks[i] < 0 { // skip the separating context
 			i++
 		}
-		if i == len(isChange) {
+		if i == len(blocks) {
 			return 0, false
 		}
 		return i, true
 	}
 
 	i := from
-	for i >= 0 && isChange[i] { // leave the current block
+	for i >= 0 && current >= 0 && blocks[i] == current { // leave the current block
 		i--
 	}
-	for i >= 0 && !isChange[i] { // skip context, landing on the previous block's last line
+	for i >= 0 && blocks[i] < 0 { // skip context, landing on the previous block's last line
 		i--
 	}
 	if i < 0 {
 		return 0, false
 	}
-	for i > 0 && isChange[i-1] { // walk back to that block's first line
+	for i > 0 && blocks[i-1] == blocks[i] { // walk back to that block's first line
 		i--
 	}
 	return i, true
+}
+
+// hasEntityRecords reports whether the renderer states which entity rows belong to,
+// which is what lets a change block be a change unit or an entity.
+func hasEntityRecords(rows []resolvedDiffLine) bool {
+	return lo.SomeBy(rows, func(row resolvedDiffLine) bool { return row.ok && row.info.EntityID != "" })
+}
+
+// changeBlocks flags every buffer line of view's rendered diff with the change block it
+// is in, or -1 for none. Where the renderer states entities, a block is a change unit
+// (or with byEntity an entity); otherwise it is a run of change lines.
+func (self *DiffLineHelper) changeBlocks(view *gocui.View, byEntity bool) []int {
+	rows := self.resolveDiffLines(diffLineContents(view))
+	if hasEntityRecords(rows) {
+		return blocksOfRows(rows, byEntity)
+	}
+	blocks := make([]int, len(rows))
+	next, inRun := 0, false
+	for i, isChange := range self.changeLines(view) {
+		switch {
+		case !isChange:
+			blocks[i] = -1
+			inRun = false
+		default:
+			if !inRun {
+				next++
+			}
+			blocks[i] = next - 1
+			inRun = true
+		}
+	}
+	return blocks
+}
+
+// blocksOfRows is changeBlocks for rows that state their entities.
+//
+// A unit is the rows that share an entity and a unit number. Rows of an entity that are
+// in no unit — a collapsed entity, an added or deleted one — are one block per run of
+// them, and so is any other change the renderer shows without an entity, except that a
+// span, such as a file's summary, is a block by itself. A header that stands in for the
+// units under it is no block of its own: staging it is staging the entity. With
+// byEntity every row of an entity, header and context included, is one block.
+//
+// Rows between the first and last of a block, such as a line of unchanged-line count,
+// belong to it, so that stepping from block to block never lands inside one.
+func blocksOfRows(rows []resolvedDiffLine, byEntity bool) []int {
+	keys := make([]string, len(rows))
+	runs := 0
+	for i, row := range rows {
+		info := row.info
+		isChange := row.ok && (info.IsChange() || info.Type == types.DiffLineSpan)
+		switch {
+		case !row.ok:
+		case info.EntityID != "" && byEntity:
+			keys[i] = fmt.Sprintf("e\x00%s\x00%s", info.Path, info.EntityID)
+		case info.EntityID != "" && info.Unit > 0:
+			keys[i] = fmt.Sprintf("u\x00%s\x00%s\x00%d", info.Path, info.EntityID, info.Unit)
+		case !isChange:
+		case info.EntityID == "" && info.Type == types.DiffLineSpan:
+			runs++
+			keys[i] = fmt.Sprintf("s%d", runs)
+		default:
+			previous := rows[max(i-1, 0)].info
+			if i == 0 || keys[i-1] == "" || keys[i-1][0] != 'r' ||
+				previous.Path != info.Path || previous.EntityID != info.EntityID {
+				runs++
+			}
+			keys[i] = fmt.Sprintf("r%d", runs)
+		}
+	}
+	if !byEntity {
+		dropStandInHeaders(rows, keys)
+	}
+
+	ids := map[string]int{}
+	first, last := map[string]int{}, map[string]int{}
+	for i, key := range keys {
+		if key == "" {
+			continue
+		}
+		if _, seen := ids[key]; !seen {
+			ids[key] = len(ids)
+			first[key] = i
+		}
+		last[key] = i
+	}
+	blocks := make([]int, len(rows))
+	for i, key := range keys {
+		blocks[i] = -1
+		if key != "" {
+			blocks[i] = ids[key]
+		}
+	}
+	filled := slices.Clone(blocks)
+	for key, id := range ids {
+		for i := first[key]; i <= last[key]; i++ {
+			if blocks[i] == -1 && (filled[i] == -1 || id < filled[i]) {
+				filled[i] = id
+			}
+		}
+	}
+	return filled
+}
+
+// dropStandInHeaders clears the keys of runs that are nothing but spans of an entity
+// whose next row is in one of its units: that is an entity's header, a stand-in for the
+// units beneath it.
+func dropStandInHeaders(rows []resolvedDiffLine, keys []string) {
+	var end int
+	for start := 0; start < len(rows); start = end + 1 {
+		end = start
+		for end+1 < len(rows) && keys[end+1] == keys[start] {
+			end++
+		}
+		onlySpans := keys[start] != "" && keys[start][0] == 'r'
+		for i := start; i <= end; i++ {
+			onlySpans = onlySpans && rows[i].info.Type == types.DiffLineSpan && rows[i].info.EntityID != ""
+		}
+		// Lines of context, and one counting unchanged lines, may stand between.
+		next := end + 1
+		for next < len(rows) && (!rows[next].ok || rows[next].info.Type == types.DiffLineContext && rows[next].info.Unit == 0) {
+			next++
+		}
+		if onlySpans && next < len(rows) {
+			next, current := rows[next], rows[end].info
+			if next.ok && next.info.Path == current.Path && next.info.EntityID == current.EntityID && next.info.Unit > 0 {
+				for i := start; i <= end; i++ {
+					keys[i] = ""
+				}
+			}
+		}
+	}
 }

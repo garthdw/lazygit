@@ -194,7 +194,7 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | Key | Action | Info |
 |-----|--------|-------------|
 | `` <tab> `` | Switch diff pane | Switch to the other focused diff pane. |
-| `` a `` | ハンクの選択を切り替える | Toggle line-by-line vs. hunk selection mode. |
+| `` a `` | ハンクの選択を切り替える | Toggle line-by-line vs. hunk selection mode. Under diff renderers that state entities, it steps through line, unit and entity selection instead. |
 | `` v `` | 範囲選択を切り替え |  |
 | `` e `` | ファイルを編集 | 外部エディタでファイルを開きます。 |
 | `` <space> `` | ステージ | 選択された部分のステージ / アンステージを切り替えます。 |
@@ -290,7 +290,7 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | `` <mouse wheel down> (fn+up) `` | 下にスクロール |  |
 | `` <mouse wheel up> (fn+down) `` | 上にスクロール |  |
 | `` <tab> `` | Switch diff pane | Switch to the other focused diff pane. |
-| `` a `` | ハンクの選択を切り替える | Toggle line-by-line vs. hunk selection mode. |
+| `` a `` | ハンクの選択を切り替える | Toggle line-by-line vs. hunk selection mode. Under diff renderers that state entities, it steps through line, unit and entity selection instead. |
 | `` v `` | 範囲選択を切り替え |  |
 | `` e `` | ファイルを編集 | 外部エディタでファイルを開きます。 |
 | `` <space> `` | ステージ | 選択された部分のステージ / アンステージを切り替えます。 |
