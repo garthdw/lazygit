@@ -92,6 +92,8 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | `` <space> `` | Staged 전환 | 선택한 행을 staged / unstaged |
 | `` d `` | 변경을 삭제 (git reset) | When unstaged change is selected, discard the change using `git reset`. When staged change is selected, unstage the change. |
 | `` E `` | Edit hunk | Edit selected hunk in external editor. |
+| `` s `` | Stage entity | Stage (or, on the staged side, unstage) every change of the entity the selected rows belong to, as the diff renderer says. |
+| `` u `` | Stage change unit | Stage (or, on the staged side, unstage) the change units of the selected rows, as the diff renderer says; a row that belongs to no unit, such as an entity's header, stands for the whole entity. |
 | `` <ctrl+o> `` | Copy selected diff lines to clipboard |  |
 | `` <left>, h `` | 이전 hunk를 선택 |  |
 | `` <right>, l `` | 다음 hunk를 선택 |  |
@@ -188,6 +190,8 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | `` <space> `` | Staged 전환 | 선택한 행을 staged / unstaged |
 | `` d `` | 변경을 삭제 (git reset) | When unstaged change is selected, discard the change using `git reset`. When staged change is selected, unstage the change. |
 | `` E `` | Edit hunk | Edit selected hunk in external editor. |
+| `` s `` | Stage entity | Stage (or, on the staged side, unstage) every change of the entity the selected rows belong to, as the diff renderer says. |
+| `` u `` | Stage change unit | Stage (or, on the staged side, unstage) the change units of the selected rows, as the diff renderer says; a row that belongs to no unit, such as an entity's header, stands for the whole entity. |
 | `` <ctrl+o> `` | Copy selected diff lines to clipboard |  |
 | `` <left>, h `` | 이전 hunk를 선택 |  |
 | `` <right>, l `` | 다음 hunk를 선택 |  |

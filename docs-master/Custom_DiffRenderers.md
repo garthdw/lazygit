@@ -61,9 +61,9 @@ A renderer that understands the code it shows, such as semdiff, can state which 
 ESC ] 1717 ; 1;s;<unit>;<entity id>;<file> BEL
 ```
 
-`<unit>` is the 1-based change unit, empty for a row outside every unit, such as the entity's header. `<entity id>` is percent-encoded.
+`<unit>` is the 1-based change unit, empty for a row outside every unit, such as the entity's header. `<entity id>` is percent-encoded. Such rows can be staged and unstaged as a whole in the focused main view of the files panel, with `stageEntity` (default `s`) for the entity of the selected row, and `stageChangeUnit` (default `u`) for its change unit: the units of every selected row, or the whole entity when the selected rows have no unit. On the staged side's diff they unstage instead. The two commands are listed only under a renderer that has an `entityPatchCommand`.
 
-lazygit doesn't know how to cut a patch out of an entity, so the renderer has to be asked, with `entityPatchCommand`. It must print a patch that `git apply --cached` can apply as it is; unstaging is asked for by the flags below, so the command prints the reversed patch itself, and lazygit never passes `--reverse` to git. A failing command (non-zero exit) is reported to the user with its error output. The command is run in the repo's root, and the entity staging commands stay disabled for renderers that don't have one.
+lazygit doesn't know how to cut a patch out of an entity, so the renderer has to be asked, with `entityPatchCommand`. It must print a patch that `git apply --cached` can apply as it is; unstaging is asked for by the flags below, so the command prints the reversed patch itself, and lazygit never passes `--reverse` to git. A failing command (non-zero exit) is reported to the user with its error output. The command is run in the repo's root, and the entity staging commands are disabled, with that as the reason, for renderers that don't have one.
 
 ```yaml
 git:
