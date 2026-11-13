@@ -313,8 +313,10 @@ func (self *WorkingTreeDiffActions) StageByEntity(
 		return file != nil && self.c.Git().WorkingTree.WorktreeFileDiff(file, git_commands.DiffModePlain, onStagedSide) != ""
 	}) || self.anyFileHasChangesOnSide(acted, onStagedSide)
 
-	// The patch went to the index, so the other side has it now.
-	self.revealSelectionInPaneItLandsIn(pane, firstBufferLine, actedSideRemains, true)
+	// The patch went to the index, so the other side has it now. The unit or entity is
+	// gone from the first row of it, which may be above the selected one.
+	startBufferLine := self.c.Helpers().DiffLine.StartOfEntityTarget(pane.GetView(), firstBufferLine, byUnit)
+	self.revealSelectionInPaneItLandsIn(pane, startBufferLine, actedSideRemains, true)
 	self.c.RefreshBlockingInput(types.RefreshOptions{Scope: []types.RefreshableView{types.FILES}})
 	if len(warnings) > 0 {
 		self.c.Toast(strings.Join(lo.Uniq(warnings), "\n"))

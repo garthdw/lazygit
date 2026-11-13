@@ -553,6 +553,7 @@ var tests = []*components.IntegrationTest{
 	main_view.SelectNextChangeAfterStaging,
 	main_view.SelectNextChangeAfterUnstaging,
 	main_view.SelectNextDeletionAfterStagingOne,
+	main_view.SelectNextUnitAfterStagingAUnit,
 	main_view.SelectVisibleChangeOnFocusingMainView,
 	main_view.SelectVisibleHunkOnFocusingMainView,
 	main_view.SelectionCommandTooltipsFollowTheDiff,
