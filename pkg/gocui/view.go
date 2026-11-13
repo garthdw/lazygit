@@ -1320,23 +1320,24 @@ func (v *View) write(p []byte) {
 	}
 
 	v.markViewLinesDirty()
-	// write only ever touches lines from v.buf.wy onwards, so any cached wrapping
-	// below that stays valid.
-	v.firstDirtyLine = min(v.firstDirtyLine, v.buf.wy)
 	v.clearHover()
 
-	v.buf.write(v, p)
+	// write only ever touches lines from the topmost one it returns onwards, so
+	// any cached wrapping above that stays valid.
+	v.firstDirtyLine = min(v.firstDirtyLine, v.buf.write(v, p))
 
 	v.searcher.positionsStale = true
 }
 
-// write parses p into cells and appends them to the buffer at its write cursor.
-// It only touches the buffer; the View wrapper above handles display-side
-// effects (tainting, hover, search). v supplies render config (Editable, colors,
-// width, tab width, hyperlink auto-rendering).
-func (b *viewBuffer) write(v *View, p []byte) {
+// write parses p into cells and appends them to the buffer at its write cursor,
+// returning the topmost line it touched. It only touches the buffer; the View
+// wrapper above handles display-side effects (tainting, hover, search). v
+// supplies render config (Editable, colors, width, tab width, hyperlink
+// auto-rendering).
+func (b *viewBuffer) write(v *View, p []byte) int {
 	// Fill with empty cells, if writing outside current view buffer
 	b.makeWriteable(b.wx, b.wy)
+	top := b.wy
 
 	finishLine := func() {
 		b.autoRenderHyperlinksInCurrentLine(v)
@@ -1409,6 +1410,14 @@ func (b *viewBuffer) write(v *View, p []byte) {
 					advanceToNextLine()
 				}
 			}
+			if cu, ok := b.ei.instruction.(cursorUp); ok {
+				b.ei.instructionRead()
+				b.autoRenderHyperlinksInCurrentLine(v)
+				b.lines[b.wy].collectMetadata()
+				b.wy = max(b.wy-cu.n, 0)
+				b.makeWriteable(b.wx, b.wy)
+				top = min(top, b.wy)
+			}
 			if cells == nil {
 				continue
 			}
@@ -1435,6 +1444,7 @@ func (b *viewBuffer) write(v *View, p []byte) {
 	} else {
 		b.autoRenderHyperlinksInCurrentLine(v)
 	}
+	return top
 }
 
 // exported functions use the mutex. Non-exported functions are for internal use
@@ -1549,6 +1559,17 @@ func (b *viewBuffer) parseInput(v *View, ch []byte, width int, x int, _ int) (bo
 			b.lines[b.wy].trailingFillAttributes = &trailingFillAttributes{
 				fg: b.ei.curFgColor,
 				bg: b.ei.curBgColor,
+			}
+			return truncateLine, cells
+		} else if _, ok := b.ei.instruction.(eraseLine); ok {
+			// The cursor stays where it is, so the line keeps blanks up to it.
+			b.ei.instructionRead()
+			b.lines[b.wy] = lineType{
+				cells: slices.Repeat([]cell{{chr: " ", width: 1, fgColor: b.ei.curFgColor, bgColor: b.ei.curBgColor}}, b.wx),
+				trailingFillAttributes: &trailingFillAttributes{
+					fg: b.ei.curFgColor,
+					bg: b.ei.curBgColor,
+				},
 			}
 			return truncateLine, cells
 		} else if cf, ok := b.ei.instruction.(cursorForward); ok {
