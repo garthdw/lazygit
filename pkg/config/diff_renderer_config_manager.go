@@ -2,11 +2,13 @@ package config
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"text/template"
 
 	"github.com/jesseduffield/lazygit/pkg/i18n"
 	"github.com/jesseduffield/lazygit/pkg/utils"
+	"github.com/samber/lo"
 )
 
 type DiffRendererConfigManager struct {
@@ -123,16 +125,69 @@ func (self *DiffRendererConfig) resolveCommand(values DiffRendererValues) (strin
 		// has no command
 	}
 
+	return resolveRendererTemplate("command", string(self.Command), variables)
+}
+
+// resolveRendererTemplate resolves a Go template of a diff renderer, in which each
+// variable can be written with or without the leading dot.
+func resolveRendererTemplate(what string, text string, variables map[string]any) (string, error) {
 	funcs := template.FuncMap{}
 	for name, value := range variables {
 		funcs[name] = func() any { return value }
 	}
 
-	command, err := utils.ResolveTemplate(string(self.Command), variables, funcs)
+	resolved, err := utils.ResolveTemplate(text, variables, funcs)
 	if err != nil {
-		return "", fmt.Errorf("git.diffRenderers: can't use the command '%s': %w", self.Command, err)
+		return "", fmt.Errorf("git.diffRenderers: can't use the %s '%s': %w", what, text, err)
 	}
-	return command, nil
+	return resolved, nil
+}
+
+// EntityPatchValues are what the entityPatchCommand of a diff renderer can refer to.
+type EntityPatchValues struct {
+	Entity string
+	// The change units to stage; none stages the whole entity.
+	Units []int
+	Path  string
+	// The path the file had before a rename, when unstaging a staged one.
+	OldPath string
+	// Whether the patch takes the entity out of the index, rather than putting it in.
+	Unstage bool
+}
+
+// HasEntityPatchCommand reports whether the current renderer can be asked for the
+// patch of an entity.
+func (self *DiffRendererConfigManager) HasEntityPatchCommand() bool {
+	currentDiffRendererConfig := self.currentDiffRendererConfig()
+	return currentDiffRendererConfig != nil && strings.TrimSpace(currentDiffRendererConfig.EntityPatchCommand) != ""
+}
+
+// GetEntityPatchCommand resolves the current renderer's entityPatchCommand, a Go
+// template like the renderer's command. The text values are passed through quote
+// before they are substituted, because the result is run by a shell and an entity id
+// or a path is nobody's idea of a command.
+func (self *DiffRendererConfigManager) GetEntityPatchCommand(values EntityPatchValues, quote func(string) string) (string, error) {
+	if !self.HasEntityPatchCommand() {
+		return "", nil
+	}
+	currentDiffRendererConfig := self.currentDiffRendererConfig()
+
+	quoteUnlessEmpty := func(text string) string {
+		if text == "" {
+			return ""
+		}
+		return quote(text)
+	}
+	units := strings.Join(lo.Map(values.Units, func(unit int, _ int) string { return strconv.Itoa(unit) }), " ")
+	variables := map[string]any{
+		"entity":  quote(values.Entity),
+		"path":    quote(values.Path),
+		"oldPath": quoteUnlessEmpty(values.OldPath),
+		"units":   units,
+		"staged":  values.Unstage,
+		"reverse": values.Unstage,
+	}
+	return resolveRendererTemplate("entityPatchCommand", currentDiffRendererConfig.EntityPatchCommand, variables)
 }
 
 func (self *DiffRendererConfigManager) GetRawGitArgs() []string {

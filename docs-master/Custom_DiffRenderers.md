@@ -53,6 +53,40 @@ git:
       name: default
 ```
 
+## Staging entities
+
+A renderer that understands the code it shows, such as semdiff, can state which entity (a function, a class) and which change unit of it each row belongs to, by adding an OSC 1717 `s` record to the row:
+
+```
+ESC ] 1717 ; 1;s;<unit>;<entity id>;<file> BEL
+```
+
+`<unit>` is the 1-based change unit, empty for a row outside every unit, such as the entity's header. `<entity id>` is percent-encoded.
+
+lazygit doesn't know how to cut a patch out of an entity, so the renderer has to be asked, with `entityPatchCommand`. It must print a patch that `git apply --cached` can apply as it is; unstaging is asked for by the flags below, so the command prints the reversed patch itself, and lazygit never passes `--reverse` to git. A failing command (non-zero exit) is reported to the user with its error output. The command is run in the repo's root, and the entity staging commands stay disabled for renderers that don't have one.
+
+```yaml
+git:
+  diffRenderers:
+    - command: semdiff --pager --color=always --width={{width}}
+      colorArg: never
+      entityPatchCommand: >-
+        semdiff patch --entity {{entity}}
+        {{if units}}--unit {{units}}{{end}}
+        {{if staged}}--staged --reverse{{end}}
+        -- {{path}} {{oldPath}}
+```
+
+The command is run by a shell, so the text values are quoted for you; don't put quotes around them. The values are:
+
+| Value | Meaning |
+| --- | --- |
+| `{{entity}}` | The entity id, decoded |
+| `{{path}}` | The file's path, relative to the repo root |
+| `{{oldPath}}` | The path before a rename, only when unstaging a staged rename (the renderer needs both paths then); empty otherwise |
+| `{{units}}` | The unit numbers, separated by spaces; empty to stage the whole entity |
+| `{{staged}}`, `{{reverse}}` | True when unstaging (both are the same), false when staging |
+
 ## Delta:
 
 ```yaml

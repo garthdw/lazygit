@@ -429,6 +429,15 @@ git:
   #   # applicable if the type is 'rawGit'.
   #   args: []
   #
+  #   # The command that prints the patch for staging or unstaging an entity
+  #   # or change unit that this renderer shows, for renderers that say which
+  #   # entity and unit each row belongs to (an OSC 1717 's' record). Its
+  #   # output is applied to the index with `git apply --cached`. Without it,
+  #   # the entity and unit staging commands are disabled for this renderer.
+  #   # It is a template; see the documentation linked below for the values
+  #   # it can refer to.
+  #   entityPatchCommand: ""
+  #
   # See https://github.com/jesseduffield/lazygit/blob/master/docs/Custom_DiffRenderers.md
   # for more information.
   diffRenderers: []
