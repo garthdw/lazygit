@@ -539,6 +539,7 @@ var tests = []*components.IntegrationTest{
 	main_view.SearchFollowsTheSelection,
 	main_view.SearchOverACommitLogKeepsTheCurrentMatchOnRefresh,
 	main_view.SearchScrollsToAMatchOffTheEdge,
+	main_view.SelectADiffOfSpansOnly,
 	main_view.SelectBelowALongCommitMessage,
 	main_view.SelectBelowALongDiffstat,
 	main_view.SelectDiffLines,
