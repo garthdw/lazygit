@@ -36,7 +36,7 @@ var UnstageAnEntity = NewIntegrationTest(NewIntegrationTestArgs{
 			Cancel()
 
 		t.Views().Secondary().
-			NavigateToLine(Contains("ENTITY early")).
+			SelectedLines(Contains("-three"), Contains("+THREE")).
 			Press(keys.Main.StageEntity)
 
 		t.Git().IndexContent("file1", "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\n")

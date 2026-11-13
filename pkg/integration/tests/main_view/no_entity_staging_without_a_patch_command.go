@@ -35,7 +35,7 @@ var NoEntityStagingWithoutAPatchCommand = NewIntegrationTest(NewIntegrationTestA
 			Cancel()
 
 		t.Views().Main().
-			SelectedLines(Contains("-three")).
+			SelectedLines(Contains("-three"), Contains("+THREE")).
 			Press(keys.Main.StageEntity)
 		t.ExpectToast(Contains("The diff renderer has no entityPatchCommand"))
 

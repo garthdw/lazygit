@@ -32,7 +32,9 @@ var StageAnEntity = NewIntegrationTest(NewIntegrationTestArgs{
 			Cancel()
 
 		t.Views().Main().
-			NavigateToLine(Contains("ENTITY late")).
+			Press(keys.Universal.NextItem).
+			Press(keys.Universal.NextItem).
+			SelectedLines(Contains("-nine"), Contains("+NINE")).
 			Press(keys.Main.StageEntity)
 
 		t.ExpectToast(Equals("usesIntroduced: NINE is used by nothing staged"))

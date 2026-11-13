@@ -51,7 +51,7 @@ var SelectNextUnitAfterStagingAUnit = NewIntegrationTest(NewIntegrationTestArgs{
 
 		t.Views().Main().
 			IsFocused().
-			SelectedLines(Contains("-three")).
+			SelectedLines(Contains("~ THREE"), Contains("-three"), Contains("+THREE")).
 			Press(keys.Main.StageChangeUnit).
 			SelectedLines(Contains("~ FOUR"))
 

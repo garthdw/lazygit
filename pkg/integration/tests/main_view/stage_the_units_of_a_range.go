@@ -20,11 +20,8 @@ var StageTheUnitsOfARange = NewIntegrationTest(NewIntegrationTestArgs{
 
 		t.Views().Main().
 			IsFocused().
-			SelectedLines(Contains("-three")).
-			Press(keys.Universal.ToggleRangeSelect).
-			SelectNextItem().
-			SelectNextItem().
-			SelectNextItem().
+			SelectedLines(Contains("-three"), Contains("+THREE")).
+			Press(keys.Universal.RangeSelectDown).
 			SelectedLines(
 				Contains("-three"),
 				Contains("+THREE"),

@@ -26,11 +26,6 @@ var SelectEntities = NewIntegrationTest(NewIntegrationTestArgs{
 
 		t.Views().Main().
 			IsFocused().
-			SelectedLines(Contains("-three"))
-		t.Views().Options().Content(Contains("Selecting lines"))
-
-		t.Views().Main().
-			Press(keys.Main.ToggleSelectHunk).
 			SelectedLines(Contains("-three"), Contains("+THREE"))
 		t.Views().Options().Content(Contains("Selecting change units"))
 
