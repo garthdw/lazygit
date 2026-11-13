@@ -20,6 +20,11 @@ const (
 // index that has none of the changes, or all of the entity's, as the tests have it.
 const fakeEntityPatchScript = `#!/bin/sh
 printf '%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "$4" "$5" >> ../entity-calls
+case "$1" in
+'file2::fn::all')
+printf '%s\n' 'diff --git a/file2 b/file2' 'new file mode 100644' '--- /dev/null' '+++ b/file2' '@@ -0,0 +1,2 @@' '+a' '+WRONG'
+exit 0 ;;
+esac
 echo "diff --git a/file1 b/file1"
 echo "--- a/file1"
 echo "+++ b/file1"
@@ -117,4 +122,19 @@ func setUpEntityStagingRepo(shell *Shell, stagedEarly bool) {
 		shell.UpdateFileAndAdd("file1", "one\ntwo\nTHREE\nFOUR\nfive\nsix\nseven\neight\nnine\nten\n")
 	}
 	shell.UpdateFile("file1", entityStagingFileAfter)
+}
+
+// entityStagingWholeFileRenderer shows file2, a new file that the one entity of it, which
+// the stand-in's patch is for, makes up all of. The patch is wrong on purpose, so that
+// applying it, rather than staging the file, shows.
+func entityStagingWholeFileRenderer() config.DiffRendererConfig {
+	return config.DiffRendererConfig{
+		Command: `cat >/dev/null; printf '` +
+			`\033]1717;1\007` +
+			`\033]1717;1;f;;;file2\007FILE file2\n` +
+			`\033]1717;1;s;;file2::fn::all;file2\007\033]1717;1;e;1-2;;file2\007ENTITY all\n` +
+			`\033]1717;1;s;1;file2::fn::all;file2\007\033]1717;1;a;1;;file2\007+a\n` +
+			`\033]1717;1;s;1;file2::fn::all;file2\007\033]1717;1;a;2;;file2\007+b\n'`,
+		EntityPatchCommand: entityStagingCommand,
+	}
 }
