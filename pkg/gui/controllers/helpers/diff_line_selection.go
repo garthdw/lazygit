@@ -141,19 +141,26 @@ func (self *DiffLineHelper) CollapseNonStickyRange(pane types.DiffPaneContext) {
 // there is nothing else to offer. Line by line it is simply the first change line on
 // screen. ok is false when the viewport shows no change at all.
 func (self *DiffLineHelper) changeToSelectOnScreen(view *gocui.View) (int, bool) {
-	if self.c.UserConfig().Gui.UseHunkModeInDiffView {
+	if self.blocksByDefault(view) {
 		return self.FirstChangeBlockInView(view)
 	}
 	return self.FirstChangeLineInView(view)
 }
 
 // hunkModeApplies reports whether an established selection should start out as the
-// whole change block around the given change line. That's what the config asks for,
+// whole change block around the given change line. That's what blocksByDefault says,
 // except over a file shown as one solid block of changes, where it would select the
 // whole file — see IsSingleHunkForWholeFile.
 func (self *DiffLineHelper) hunkModeApplies(view *gocui.View, changeViewLine int) bool {
-	return self.c.UserConfig().Gui.UseHunkModeInDiffView &&
-		!self.IsSingleHunkForWholeFile(view, changeViewLine)
+	return self.blocksByDefault(view) && !self.IsSingleHunkForWholeFile(view, changeViewLine)
+}
+
+// blocksByDefault reports whether a selection starts out as a whole change block: when
+// the config asks for hunk mode, and whenever the renderer states change units, which
+// are what staging from such a diff is built around.
+func (self *DiffLineHelper) blocksByDefault(view *gocui.View) bool {
+	return self.c.UserConfig().Gui.UseHunkModeInDiffView ||
+		self.HasEntityRecords(view)
 }
 
 // ShowSelectionAtLine moves the focused main view's selection to the given view line,

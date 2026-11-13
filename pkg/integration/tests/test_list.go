@@ -552,6 +552,7 @@ var tests = []*components.IntegrationTest{
 	main_view.SelectChangeUnits,
 	main_view.SelectDiffLines,
 	main_view.SelectEntities,
+	main_view.SelectFirstUnitOnFocusingMainView,
 	main_view.SelectHunkBelowLastChange,
 	main_view.SelectHunkInDiff,
 	main_view.SelectHunkOnFocusingMainView,
