@@ -144,6 +144,15 @@ func (self *MainViewController) GetKeybindings(opts types.KeybindingsOpts) []*ty
 			DisplayOnScreen:   true,
 		},
 		{
+			Keys:              opts.GetKeys(opts.Config.Main.ShowConsumers),
+			Handler:           self.showConsumers,
+			Description:       self.c.Tr.ShowConsumers,
+			DescriptionFunc:   self.showConsumersDescription,
+			GetDisabledReason: self.showConsumersDisabledReason,
+			Tooltip:           self.c.Tr.ShowConsumersTooltip,
+			DisplayOnScreen:   true,
+		},
+		{
 			Keys:              opts.GetKeys(opts.Config.Universal.CopyToClipboard),
 			Handler:           self.copySelection,
 			Description:       self.c.Tr.CopySelectedDiffLinesToClipboard,
