@@ -486,6 +486,7 @@ var tests = []*components.IntegrationTest{
 	main_view.KeepSelectedRangeWhenChangingContextSize,
 	main_view.KeepSelectionAfterMovingPatchOut,
 	main_view.KeepSelectionVisibleWhenDiffShrinks,
+	main_view.KeepTheEntityModeAcrossPanes,
 	main_view.MoveAmbiguouslyPlacedAddedLinesToEarlierCommit,
 	main_view.MoveAmbiguouslyPlacedAddedLinesToNewCommitBefore,
 	main_view.MoveMultiFileRangeToIndex,
