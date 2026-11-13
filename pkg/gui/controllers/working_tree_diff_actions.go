@@ -288,7 +288,19 @@ func (self *WorkingTreeDiffActions) StageByEntity(
 		if err != nil {
 			return err
 		}
-		if err := self.c.Git().Patch.ApplyPatch(patchText, git_commands.ApplyPatchOpts{Cached: true}); err != nil {
+
+		// A patch of every change the file has on this side is the file staged (or
+		// unstaged) as a whole, which is not the same as applying its diff: a new or
+		// deleted file, a rename, would be put into the index as content rather than as
+		// what it is.
+		opts := git_commands.ApplyPatchOpts{Reverse: onStagedSide, Cached: true}
+		diffText := self.c.Git().WorkingTree.WorktreeFileDiff(file, git_commands.DiffModePlain, onStagedSide)
+		if changeLineCount(patch.Parse(patchText)) >= changeLineCount(patch.Parse(diffText)) {
+			err = self.applyDiffLinesPatch(diffLinesPatch{file: file, wholeFile: true}, opts)
+		} else {
+			err = self.c.Git().Patch.ApplyPatch(patchText, git_commands.ApplyPatchOpts{Cached: true})
+		}
+		if err != nil {
 			return err
 		}
 		acted.Add(file.GetPath())
