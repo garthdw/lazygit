@@ -225,7 +225,7 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | `` <mouse wheel down> (fn+up) `` | Scroll down |  |
 | `` <mouse wheel up> (fn+down) `` | Scroll up |  |
 | `` <tab> `` | Switch diff pane | Switch to the other focused diff pane. |
-| `` a `` | Toggle hunk selection | Toggle line-by-line vs. hunk selection mode. |
+| `` a `` | Toggle hunk selection | Toggle line-by-line vs. hunk selection mode. Under diff renderers that state entities, it steps through line, unit and entity selection instead. |
 | `` v `` | Toggle range select |  |
 | `` e `` | Edit file | Open file in external editor. |
 | `` <space> `` | Stage | Toggle selection staged / unstaged. |
@@ -313,7 +313,7 @@ _This file is auto-generated. To update, make the changes in the pkg/i18n direct
 | Key | Action | Info |
 |-----|--------|-------------|
 | `` <tab> `` | Switch diff pane | Switch to the other focused diff pane. |
-| `` a `` | Toggle hunk selection | Toggle line-by-line vs. hunk selection mode. |
+| `` a `` | Toggle hunk selection | Toggle line-by-line vs. hunk selection mode. Under diff renderers that state entities, it steps through line, unit and entity selection instead. |
 | `` v `` | Toggle range select |  |
 | `` e `` | Edit file | Open file in external editor. |
 | `` <space> `` | Stage | Toggle selection staged / unstaged. |
