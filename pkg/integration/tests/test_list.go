@@ -731,6 +731,7 @@ var tests = []*components.IntegrationTest{
 	ui.HideSidePanel,
 	ui.KeybindingSuggestionsDontCrashOnDisabledBindings,
 	ui.KeybindingSuggestionsWhenSwitchingRepos,
+	ui.MenuFitsSectionHeaders,
 	ui.MenuScrollPositionIsReset,
 	ui.ModeSpecificKeybindingSuggestions,
 	ui.MoveCommitScrollsSelectionIntoView,
