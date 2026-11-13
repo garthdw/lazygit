@@ -1018,3 +1018,83 @@ index 0000000..1111111 100644
 		})
 	}
 }
+
+// A span with only deletions or only additions still stays in place within a block
+// that also holds other changes.
+func TestTransformSelectedSpanWithOneSideOnly(t *testing.T) {
+	diff := `diff --git a/filename b/filename
+index 0000000..1111111 100644
+--- a/filename
++++ b/filename
+@@ -1,5 +1,6 @@
+ head
+-old1
+-old2
+-old3
++new1
++new2
++new3
++new4
+ tail
+`
+	// old1..old3 are 6..8 and new1..new4 are 9..12.
+	scenarios := []struct {
+		testName string
+		included []int
+		expected string
+	}{
+		{
+			testName: "pure deletion in the middle",
+			included: []int{7},
+			expected: `--- a/filename
++++ b/filename
+@@ -1,5 +1,4 @@
+ head
+ old1
+-old2
+ old3
+ tail
+`,
+		},
+		{
+			testName: "pure insertion after the paired lines",
+			included: []int{6, 9, 12},
+			expected: `--- a/filename
++++ b/filename
+@@ -1,5 +1,6 @@
+ head
+-old1
++new1
++new4
+ old2
+ old3
+ tail
+`,
+		},
+		{
+			testName: "pure insertion beyond the deletions with the middle pair staged",
+			included: []int{7, 10, 12},
+			expected: `--- a/filename
++++ b/filename
+@@ -1,5 +1,6 @@
+ head
+ old1
+-old2
++new2
++new4
+ old3
+ tail
+`,
+		},
+	}
+
+	for _, s := range scenarios {
+		t.Run(s.testName, func(t *testing.T) {
+			result := Parse(diff).
+				Transform(TransformOpts{FileNameOverride: "filename", IncludedLineIndices: s.included}).
+				FormatPlain()
+
+			assert.Equal(t, s.expected, result)
+		})
+	}
+}
