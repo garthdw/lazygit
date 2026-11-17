@@ -248,6 +248,10 @@ func (self *DiffLineHelper) IsChangeLine(view *gocui.View, viewLineIdx int) bool
 // It says false while the diff is still being read in, since the rows that would
 // answer otherwise — a context line, a change of the other kind — may not have
 // arrived yet. That errs towards hunk mode, which is what the user asked for.
+//
+// It also says false for a span, which a renderer draws as a block of its own: a file
+// whose only change is a reformatted function shown as one row is no added or deleted
+// file, and that row is the change unit staging it goes through.
 func (self *DiffLineHelper) IsSingleHunkForWholeFile(view *gocui.View, changeViewLine int) bool {
 	if manager := self.c.GetViewBufferManagerForView(view); manager != nil && manager.IsLoading() {
 		return false
@@ -258,7 +262,7 @@ func (self *DiffLineHelper) IsSingleHunkForWholeFile(view *gocui.View, changeVie
 		return false
 	}
 	resolved := self.resolveDiffLines(diffLineContents(view))
-	if anchor >= len(resolved) || !resolved[anchor].ok {
+	if anchor >= len(resolved) || !resolved[anchor].ok || !resolved[anchor].info.IsChange() {
 		return false
 	}
 
