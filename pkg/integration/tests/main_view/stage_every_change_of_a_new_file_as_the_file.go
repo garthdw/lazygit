@@ -29,7 +29,7 @@ var StageEveryChangeOfANewFileAsTheFile = NewIntegrationTest(NewIntegrationTestA
 			NavigateToLine(Contains("ENTITY all")).
 			Press(keys.Main.StageEntity)
 
-		// The patch the stand-in prints says WRONG; it was never applied.
+		// The stand-in patch has no new-file header, so applying it would have failed.
 		t.Git().IndexContent("file2", "a\nb\n")
 		t.Views().Files().Lines(Contains("A").Contains("file2"))
 	},
