@@ -29,7 +29,7 @@ var RecentReposReftableRepo = NewIntegrationTest(NewIntegrationTestArgs{
 		shell.RunCommand([]string{"git", "clone", "--ref-format=reftable", ".", "../reftable"})
 		// A branch without a commit is the one thing git can't answer for with
 		// rev-parse
-		shell.RunCommand([]string{"git", "init", "--ref-format=reftable", "../reftable-unborn"})
+		shell.RunCommand([]string{"git", "-c", "init.defaultBranch=master", "init", "--ref-format=reftable", "../reftable-unborn"})
 	},
 	Run: func(t *TestDriver, keys config.KeybindingConfig) {
 		t.ExpectPopup().Menu().
