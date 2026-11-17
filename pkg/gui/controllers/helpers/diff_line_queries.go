@@ -239,6 +239,26 @@ func (self *DiffLineHelper) IsChangeLine(view *gocui.View, viewLineIdx int) bool
 	return ok && info.IsChange()
 }
 
+// IsChangeBlockLine reports whether the given view line of view's rendered diff is a
+// row that pointing at in hunk mode selects the change block of: a change line, or a
+// span the renderer draws a block as, such as a collapsed entity or a `~` row. An
+// entity's header standing in for the units under it is in no block.
+func (self *DiffLineHelper) IsChangeBlockLine(view *gocui.View, viewLineIdx int) bool {
+	info, ok := self.GetDiffLineInfo(view, viewLineIdx)
+	if !ok {
+		return false
+	}
+	if info.IsChange() {
+		return true
+	}
+	bufferLine, ok := view.BufferLineForViewLine(viewLineIdx)
+	if !ok || info.Type != types.DiffLineSpan {
+		return false
+	}
+	blocks := self.changeBlocks(view, false)
+	return bufferLine < len(blocks) && blocks[bufferLine] >= 0
+}
+
 // IsSingleHunkForWholeFile reports whether the file the given change line belongs to
 // is shown as one solid block of changes — every row of its diff a change of the same
 // kind, no context — which is what a newly added or deleted file looks like. That is

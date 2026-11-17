@@ -579,6 +579,7 @@ var tests = []*components.IntegrationTest{
 	main_view.ShowTheTabSwitchedToLast,
 	main_view.StageAChangeUnit,
 	main_view.StageACollapsedEntityRow,
+	main_view.StageACollapsedEntityRowByClick,
 	main_view.StageASpanInAChangeBlock,
 	main_view.StageASpanOfLines,
 	main_view.StageAnEntity,

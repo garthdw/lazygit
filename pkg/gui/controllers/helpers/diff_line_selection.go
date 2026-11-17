@@ -24,7 +24,7 @@ import (
 //
 // With hunk mode configured as the default the selection widens to the whole change
 // block: keyboard focus lands on the first block on screen, and a click on a change
-// line selects that line's block, ready to act on. A click on context still selects
+// line, or on a span drawn as a block, selects that block, ready to act on. A click on context still selects
 // just that line — the click points at it precisely, so it stays editable.
 func (self *DiffLineHelper) EstablishSelection(mainContext *context.MainContext, clickedViewLine int) {
 	mainContext.ResetDiffSelectMode()
@@ -41,7 +41,7 @@ func (self *DiffLineHelper) EstablishSelection(mainContext *context.MainContext,
 		// Remember where the click landed so that a drag that follows anchors its range
 		// there, even when this click selects a whole hunk.
 		mainContext.SetDragAnchorViewLine(clickedViewLine)
-		if self.hunkModeApplies(view, clickedViewLine) && self.IsChangeLine(view, clickedViewLine) {
+		if self.hunkModeApplies(view, clickedViewLine) && self.IsChangeBlockLine(view, clickedViewLine) {
 			mainContext.DiffSelectState().Mode = types.DiffSelectModeHunk
 			self.SelectChangeBlock(mainContext, clickedViewLine, false)
 			return

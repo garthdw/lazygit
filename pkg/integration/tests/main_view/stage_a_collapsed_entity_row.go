@@ -29,22 +29,31 @@ diff --git a/a.ts b/a.ts
 PATCH
 `
 
+func setUpCollapsedEntityConfig(cfg *config.AppConfig) {
+	cfg.GetUserConfig().Git.DiffRenderers = []config.DiffRendererConfig{{
+		Command:            collapsedEntityRenderer,
+		EntityPatchCommand: entityStagingCommand,
+	}}
+}
+
+func setUpCollapsedEntityRepo(shell *Shell) {
+	shell.CreateFile("../entity-patch.sh", collapsedEntityPatchScript)
+	shell.CreateFileAndAdd("a.ts", "export function t(a: number) {\n  return a + 1\n}\n")
+	shell.Commit("one")
+	shell.UpdateFile("a.ts", "export function t(a: number) {\n    return a +  1\n}\n")
+}
+
+func expectCollapsedEntityStagedAsUnit(t *TestDriver) {
+	t.Git().IndexContent("a.ts", "export function t(a: number) {\n    return a +  1\n}\n")
+	t.FileSystem().FileContent("../entity-calls", Equals("a.ts::function::t|1|false|a.ts|\n"))
+}
+
 var StageACollapsedEntityRow = NewIntegrationTest(NewIntegrationTestArgs{
 	Description:  "A file whose only change is an entity the renderer collapses to one row of a unit can be selected and staged there",
 	ExtraCmdArgs: []string{},
 	Skip:         false,
-	SetupConfig: func(cfg *config.AppConfig) {
-		cfg.GetUserConfig().Git.DiffRenderers = []config.DiffRendererConfig{{
-			Command:            collapsedEntityRenderer,
-			EntityPatchCommand: `sh ../entity-patch.sh {{entity}} "{{units}}" {{staged}} {{path}} {{oldPath}}`,
-		}}
-	},
-	SetupRepo: func(shell *Shell) {
-		shell.CreateFile("../entity-patch.sh", collapsedEntityPatchScript)
-		shell.CreateFileAndAdd("a.ts", "export function t(a: number) {\n  return a + 1\n}\n")
-		shell.Commit("one")
-		shell.UpdateFile("a.ts", "export function t(a: number) {\n    return a +  1\n}\n")
-	},
+	SetupConfig:  setUpCollapsedEntityConfig,
+	SetupRepo:    setUpCollapsedEntityRepo,
 	Run: func(t *TestDriver, keys config.KeybindingConfig) {
 		t.Views().Files().
 			IsFocused().
@@ -55,7 +64,6 @@ var StageACollapsedEntityRow = NewIntegrationTest(NewIntegrationTestArgs{
 			SelectedLines(Contains("formatting only")).
 			PressPrimaryAction()
 
-		t.Git().IndexContent("a.ts", "export function t(a: number) {\n    return a +  1\n}\n")
-		t.FileSystem().FileContent("../entity-calls", Equals("a.ts::function::t|1|false|a.ts|\n"))
+		expectCollapsedEntityStagedAsUnit(t)
 	},
 })
