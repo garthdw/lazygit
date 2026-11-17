@@ -153,7 +153,9 @@ func diffLineContents(view *gocui.View) []gocui.DiffLineContent {
 // replacing it.
 //
 // An 's' record names no diff line: it says which entity and change unit the row
-// belongs to, and is put on the lines of the same file that the row shows.
+// belongs to, and is put on the lines of the same file that the row shows. A row
+// of a unit that shows no diff line (a line git sees as unchanged, which the unit
+// still stages) is a context line of that unit, so the unit can be selected there.
 func parseDiffLineRecords(metadata []string) []parsedDiffLine {
 	parsed := make([]parsedDiffLine, 0, len(metadata))
 	var entity entityRecord
@@ -163,6 +165,9 @@ func parseDiffLineRecords(metadata []string) []parsedDiffLine {
 		} else if parsedEntity, ok := parseEntityMetadata(record); ok {
 			entity = parsedEntity
 		}
+	}
+	if len(parsed) == 0 && entity.unit > 0 {
+		return []parsedDiffLine{{Path: entity.path, Type: types.DiffLineContext, EntityID: entity.id, Unit: entity.unit}}
 	}
 	if entity.id != "" {
 		for i := range parsed {

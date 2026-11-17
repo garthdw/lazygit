@@ -56,3 +56,17 @@ func TestBlocksOfRowsHeaderBeforeUnchangedLines(t *testing.T) {
 
 	assert.Equal(t, []int{-1, -1, 0}, blocksOfRows(rows, false))
 }
+
+func TestBlocksOfRowsUnitOfUnchangedLines(t *testing.T) {
+	row := func(lineType types.DiffLineType, unit int) resolvedDiffLine {
+		return resolvedDiffLine{info: types.DiffLineInfo{Type: lineType, Path: "f", EntityID: "m", Unit: unit}, ok: true}
+	}
+	rows := []resolvedDiffLine{
+		row(types.DiffLineContext, 1), // a unit whose line git sees as unchanged
+		row(types.DiffLineDeleted, 2),
+		row(types.DiffLineContext, 3),
+		row(types.DiffLineAdded, 4),
+	}
+
+	assert.Equal(t, []int{0, 1, 2, 3}, blocksOfRows(rows, false))
+}
