@@ -311,16 +311,25 @@ func stepRows(rows []resolvedDiffLine, kind stepKind) []bool {
 		}
 		return steps
 	}
+	spans := make([]bool, len(rows))
 	for i, row := range rows {
 		switch {
 		case !row.ok:
 		case row.info.IsChange():
 			steps[i] = true
-		case kind == stepLinesAndSpans && row.info.Type == types.DiffLineSpan:
+		case row.info.Type == types.DiffLineSpan:
 			isHeader := row.info.EntityID != "" && row.info.Unit == 0 && i+1 < len(rows) &&
 				rows[i+1].ok && rows[i+1].info.EntityID == row.info.EntityID &&
 				rows[i+1].info.Path == row.info.Path
-			steps[i] = !isHeader
+			spans[i] = !isHeader
+		}
+	}
+	// A diff whose every change is a span, such as a file summary left once the units
+	// around it are staged, has its spans as the change lines blocks are made of (see
+	// changeLines), so they are the places then whatever the kind.
+	if kind == stepLinesAndSpans || !lo.Contains(steps, true) {
+		for i, isSpan := range spans {
+			steps[i] = steps[i] || isSpan
 		}
 	}
 	return steps
@@ -398,6 +407,11 @@ func (self *DiffLineHelper) RevealChangeLineAtOrdinal(
 			for _, row := range rows {
 				info, ok := self.diffLineInfoFromRecords(row.Metadata)
 				loaded = append(loaded, resolvedDiffLine{info, ok})
+			}
+			// Until a change line has arrived, the spans may yet turn out not to be places
+			// (see stepRows).
+			if kind != stepLinesAndSpans && !lo.SomeBy(loaded, func(row resolvedDiffLine) bool { return row.ok && row.info.IsChange() }) {
+				return 0, false
 			}
 			steps := stepRows(loaded, kind)
 			for ; judged < len(loaded)-1; judged++ {

@@ -580,6 +580,7 @@ var tests = []*components.IntegrationTest{
 	main_view.StageAChangeUnit,
 	main_view.StageACollapsedEntityRow,
 	main_view.StageACollapsedEntityRowByClick,
+	main_view.StageAFileSummaryLeftAfterAUnit,
 	main_view.StageASpanInAChangeBlock,
 	main_view.StageASpanOfLines,
 	main_view.StageAnEntity,
