@@ -575,7 +575,8 @@ func TestParseDiffLineIdentities(t *testing.T) {
 			row("addItem", "1;s;;a.ts::function::addItem;a.ts", "1;e;3-4;3-4;a.ts"),
 			row("-three", "1;s;1;a.ts::function::addItem;a.ts", "1;d;3;3;a.ts"),
 			row("+THREE", "1;s;1;a.ts::function::addItem;a.ts", "1;a;3;;a.ts"),
-			row("divider", "1;s;1;a.ts::function::addItem;a.ts"),
+			row("unit row of an unchanged line", "1;s;1;a.ts::function::addItem;a.ts"),
+			row("header", "1;s;;a.ts::function::addItem;a.ts"),
 			row("elsewhere", "1;s;2;b.ts::function::f;b.ts", "1;c;1;;a.ts"),
 		}
 
@@ -583,6 +584,7 @@ func TestParseDiffLineIdentities(t *testing.T) {
 			{{Path: "a.ts", Type: types.DiffLineSpan, NewLine: 3, NewEnd: 4, OldLine: 3, OldEnd: 4, EntityID: "a.ts::function::addItem"}},
 			{{Path: "a.ts", Type: types.DiffLineDeleted, NewLine: 3, OldLine: 3, EntityID: "a.ts::function::addItem", Unit: 1}},
 			{{Path: "a.ts", Type: types.DiffLineAdded, NewLine: 3, EntityID: "a.ts::function::addItem", Unit: 1}},
+			{{Path: "a.ts", Type: types.DiffLineContext, EntityID: "a.ts::function::addItem", Unit: 1}},
 			nil,
 			{{Path: "a.ts", Type: types.DiffLineContext, NewLine: 1}},
 		}, parseDiffLineIdentities(contents))
