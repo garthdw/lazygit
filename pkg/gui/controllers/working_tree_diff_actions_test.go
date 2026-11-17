@@ -86,3 +86,12 @@ func TestEntityTargets(t *testing.T) {
 		})
 	}
 }
+
+func TestIsWholeFilePatch(t *testing.T) {
+	diff := "diff --git a/w.ts b/w.ts\n--- a/w.ts\n+++ b/w.ts\n@@ -1,6 +1,8 @@\n export function a() {\n-  if (Cart) {\n-  }\n   if (item) {\n+    if (Cart) {\n+    }\n+    if (item) {\n+    }\n   }\n }\n"
+	// One unit: the same number of changed lines, but not the same lines.
+	unit := "diff --git a/w.ts b/w.ts\n--- a/w.ts\n+++ b/w.ts\n@@ -1,4 +1,8 @@\n export function a() {\n-  if (Cart) {\n-  }\n+  if (item) {\n+    if (Cart) {\n+    }\n+    if (item) {\n+    }\n+  }\n   if (item) {\n"
+
+	assert.True(t, isWholeFilePatch(diff, diff))
+	assert.False(t, isWholeFilePatch(unit, diff))
+}

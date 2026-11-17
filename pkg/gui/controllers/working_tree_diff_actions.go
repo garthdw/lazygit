@@ -307,7 +307,7 @@ func (self *WorkingTreeDiffActions) StageByEntity(
 		// what it is.
 		opts := git_commands.ApplyPatchOpts{Reverse: onStagedSide, Cached: true}
 		diffText := self.c.Git().WorkingTree.WorktreeFileDiff(file, git_commands.DiffModePlain, onStagedSide)
-		if changeLineCount(patch.Parse(patchText)) >= changeLineCount(patch.Parse(diffText)) {
+		if isWholeFilePatch(patchText, diffText) {
 			err = self.applyDiffLinesPatch(diffLinesPatch{file: file, wholeFile: true}, opts)
 		} else {
 			err = self.c.Git().Patch.ApplyPatch(patchText, git_commands.ApplyPatchOpts{Cached: true})
@@ -556,6 +556,21 @@ func changeLineCount(p *patch.Patch) int {
 	return lo.CountBy(p.Lines(), func(line *patch.PatchLine) bool {
 		return line.IsAddition() || line.IsDeletion()
 	})
+}
+
+// isWholeFilePatch reports whether a patch makes every change the file's diff makes:
+// the same lines added and removed. A patch that only changes as many lines is not
+// enough, since a renderer may pair lines differently from git (a unit that wraps a
+// block around code its neighbour removes changes as many lines as the whole diff).
+func isWholeFilePatch(patchText string, diffText string) bool {
+	changes := func(text string) []string {
+		lines := lo.FilterMap(patch.Parse(text).Lines(), func(line *patch.PatchLine, _ int) (string, bool) {
+			return line.Content, line.IsAddition() || line.IsDeletion()
+		})
+		slices.Sort(lines)
+		return lines
+	}
+	return slices.Equal(changes(patchText), changes(diffText))
 }
 
 // revealSelectionInPaneItLandsIn arranges for the selection to carry on where the work

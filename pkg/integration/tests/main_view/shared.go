@@ -22,7 +22,7 @@ const fakeEntityPatchScript = `#!/bin/sh
 printf '%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "$4" "$5" >> ../entity-calls
 case "$1" in
 'file2::fn::all')
-printf '%s\n' 'diff --git a/file2 b/file2' 'new file mode 100644' '--- /dev/null' '+++ b/file2' '@@ -0,0 +1,2 @@' '+a' '+WRONG'
+printf '%s\n' 'diff --git a/file2 b/file2' '--- a/file2' '+++ b/file2' '@@ -0,0 +1,2 @@' '+a' '+b'
 exit 0 ;;
 esac
 echo "diff --git a/file1 b/file1"
