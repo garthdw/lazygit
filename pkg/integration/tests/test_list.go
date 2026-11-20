@@ -462,6 +462,7 @@ var tests = []*components.IntegrationTest{
 	main_view.EditHunkInFocusedDiff,
 	main_view.EditSelectedDiffLine,
 	main_view.EnterAndDoubleClickFocusFileDiff,
+	main_view.EntityBreadcrumbInTitle,
 	main_view.EscapeDismissesSelection,
 	main_view.FileNavigationScrollsToTheTop,
 	main_view.FocusFollowsAPaneEmptiedFromOutside,

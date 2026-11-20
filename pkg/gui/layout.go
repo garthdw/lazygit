@@ -224,6 +224,7 @@ func (gui *Gui) layout(g *gocui.Gui) error {
 	gui.helpers.Confirmation.ResizeCurrentPopupPanels()
 
 	gui.renderContextOptionsMap()
+	gui.renderMainPaneTitles()
 
 outer:
 	for {

@@ -1103,8 +1103,7 @@ func (self *MainViewController) toggleRangeSelect() error {
 // from hunk mode where the renderer states entities, so that a range of units or of
 // entities can be staged together.
 func (self *MainViewController) extendsByBlock() bool {
-	sel := self.diffSelectState()
-	return (sel.Mode == types.DiffSelectModeHunk || sel.Mode == types.DiffSelectModeRange && sel.RangeByBlock) &&
+	return self.diffSelectState().SelectsBlocks() &&
 		self.c.Helpers().DiffLine.HasEntityRecords(self.context.GetView())
 }
 

@@ -32,3 +32,9 @@ type DiffSelectState struct {
 	// mode, rather than a line.
 	RangeByBlock bool
 }
+
+// SelectsBlocks reports whether whole change blocks are selected (hunks, or the units
+// or entities a renderer states), alone or as a range grown a block at a time.
+func (self *DiffSelectState) SelectsBlocks() bool {
+	return self.Mode == DiffSelectModeHunk || self.Mode == DiffSelectModeRange && self.RangeByBlock
+}
