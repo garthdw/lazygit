@@ -21,7 +21,7 @@ const breadcrumbRenderer = `cat >/dev/null; printf '` +
 	`\033]1717;1;s;1;file1::fn::late;file1\007\033]1717;1;a;9;;file1\007+NINE\n'`
 
 var EntityBreadcrumbInTitle = NewIntegrationTest(NewIntegrationTestArgs{
-	Description:  "Where the renderer states entities' breadcrumbs, the focused main view's title names the entity under the cursor",
+	Description:  "Where the renderer states entities' breadcrumbs, the focused main view's title names the entity of the selected change unit or entity, but not of a selected line",
 	ExtraCmdArgs: []string{},
 	Skip:         false,
 	SetupConfig: func(cfg *config.AppConfig) {
@@ -44,6 +44,12 @@ var EntityBreadcrumbInTitle = NewIntegrationTest(NewIntegrationTestArgs{
 			Press(keys.Universal.NextItem).
 			SelectedLines(Contains("-nine"), Contains("+NINE")).
 			Title(Equals("Unstaged changes · late")).
+			Press(keys.Main.ToggleSelectHunk).
+			SelectedLines(Contains("ENTITY late"), Contains("-nine"), Contains("+NINE")).
+			Title(Equals("Unstaged changes · late")).
+			Press(keys.Main.ToggleSelectHunk).
+			SelectedLines(Contains("ENTITY late")).
+			Title(Equals("Unstaged changes")).
 			Press(keys.Universal.Return)
 
 		t.Views().Files().IsFocused()

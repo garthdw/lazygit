@@ -519,16 +519,18 @@ func (gui *Gui) mainContextForView(view *gocui.View) *context.MainContext {
 	return nil
 }
 
-// renderMainPaneTitles names, in the focused main pane's title, the entity under its
-// cursor, where the diff renderer states one. It runs on every layout, since the cursor
-// can move by key, mouse, or a re-render restoring it.
+// renderMainPaneTitles names, in the focused main pane's title, the entity of the
+// selected change unit or entity, where the diff renderer states one. A selected line
+// gets none: stepping line by line crosses rows of no entity, and the title would
+// flicker. It runs on every layout, since the selection can move by key, mouse, or a
+// re-render restoring it.
 func (gui *Gui) renderMainPaneTitles() {
 	for _, mainContext := range []*context.MainContext{gui.State.Contexts.Normal, gui.State.Contexts.NormalSecondary} {
 		title := mainContext.PaneTitle()
 		if title == "" {
 			continue
 		}
-		if gui.c.Context().IsCurrent(mainContext) {
+		if gui.c.Context().IsCurrent(mainContext) && mainContext.DiffSelectState().SelectsBlocks() {
 			if breadcrumb := gui.helpers.DiffLine.EntityBreadcrumb(mainContext.GetView()); breadcrumb != "" {
 				title += " · " + breadcrumb
 			}
