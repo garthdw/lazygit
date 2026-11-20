@@ -69,6 +69,9 @@ func (gui *Gui) RefreshMainView(opts *types.ViewUpdateOpts, context types.Contex
 	view.Subtitle = opts.SubTitle
 
 	if mainContext := gui.mainContextForView(view); mainContext != nil {
+		if opts.Title != "" {
+			mainContext.SetPaneTitle(opts.Title)
+		}
 		mainContext.SetContentIsDiff(types.ContentIsDiff(opts.Task))
 		// A diff is wrapped as the user asks; anything else a main pane shows is prose
 		// or a log, and reads as badly cut off at the edge of the pane as it would
@@ -514,6 +517,24 @@ func (gui *Gui) mainContextForView(view *gocui.View) *context.MainContext {
 		return gui.State.Contexts.NormalSecondary
 	}
 	return nil
+}
+
+// renderMainPaneTitles names, in the focused main pane's title, the entity under its
+// cursor, where the diff renderer states one. It runs on every layout, since the cursor
+// can move by key, mouse, or a re-render restoring it.
+func (gui *Gui) renderMainPaneTitles() {
+	for _, mainContext := range []*context.MainContext{gui.State.Contexts.Normal, gui.State.Contexts.NormalSecondary} {
+		title := mainContext.PaneTitle()
+		if title == "" {
+			continue
+		}
+		if gui.c.Context().IsCurrent(mainContext) {
+			if breadcrumb := gui.helpers.DiffLine.EntityBreadcrumb(mainContext.GetView()); breadcrumb != "" {
+				title += " · " + breadcrumb
+			}
+		}
+		mainContext.GetView().Title = title
+	}
 }
 
 func (gui *Gui) setMainPanes(panes types.MainPanes) {

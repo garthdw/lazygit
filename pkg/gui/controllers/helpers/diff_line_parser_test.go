@@ -481,6 +481,73 @@ func TestParseEntityMetadata(t *testing.T) {
 	}
 }
 
+func TestParseBreadcrumbMetadata(t *testing.T) {
+	scenarios := []struct {
+		name     string
+		payload  string
+		expected breadcrumbRecord
+		expectOk bool
+	}{
+		{"an entity's breadcrumb", "1;b;src/cart.ts::class::Cart::addItem;Cart %E2%80%BA addItem;src/cart.ts", breadcrumbRecord{id: "src/cart.ts::class::Cart::addItem", breadcrumb: "Cart › addItem", path: "src/cart.ts"}, true},
+		{"a name containing the id's separator", "1;b;a.rs::impl::fmt::Display for Cart::fmt;fmt::Display for Cart %E2%80%BA fmt;a.rs", breadcrumbRecord{id: "a.rs::impl::fmt::Display for Cart::fmt", breadcrumb: "fmt::Display for Cart › fmt", path: "a.rs"}, true},
+		{"a path containing a semicolon", "1;b;a.ts::function::f;f;dir;a.ts", breadcrumbRecord{id: "a.ts::function::f", breadcrumb: "f", path: "dir;a.ts"}, true},
+		{"no breadcrumb", "1;b;a.ts::function::f;;a.ts", breadcrumbRecord{}, false},
+		{"no entity", "1;b;;f;a.ts", breadcrumbRecord{}, false},
+		{"a malformed escape", "1;b;a.ts::function::f;f%zz;a.ts", breadcrumbRecord{}, false},
+		{"too few fields", "1;b;a.ts::function::f;f", breadcrumbRecord{}, false},
+		{"unknown version", "2;b;a.ts::function::f;f;a.ts", breadcrumbRecord{}, false},
+		{"another type", "1;s;;a.ts::function::f;a.ts", breadcrumbRecord{}, false},
+	}
+
+	for _, s := range scenarios {
+		t.Run(s.name, func(t *testing.T) {
+			result, ok := parseBreadcrumbMetadata(s.payload)
+			assert.Equal(t, s.expectOk, ok)
+			if s.expectOk {
+				assert.Equal(t, s.expected, result)
+			}
+		})
+	}
+}
+
+func TestEntityBreadcrumbAt(t *testing.T) {
+	const (
+		cart  = "src/cart.ts::class::Cart::addItem"
+		total = "src/cart.ts::function::total"
+	)
+	metadata := [][]string{
+		{"1;f;;;src/cart.ts"},
+		{"1;s;;" + cart + ";src/cart.ts", "1;b;" + cart + ";Cart %E2%80%BA addItem;src/cart.ts", "1;e;3-4;3-4;src/cart.ts"},
+		{"1;s;1;" + cart + ";src/cart.ts", "1;d;3;3;src/cart.ts"},
+		{},
+		{"1;s;1;" + cart + ";src/cart.ts", "1;a;4;;src/cart.ts"},
+		{"1;s;;" + total + ";src/cart.ts", "1;b;" + total + ";total;src/cart.ts", "1;e;9-9;9-9;src/cart.ts"},
+		{"1;s;;" + total + ";src/other.ts", "1;c;9;9;src/other.ts"},
+	}
+
+	scenarios := []struct {
+		name       string
+		bufferLine int
+		expected   string
+	}{
+		{"the header row", 1, "Cart › addItem"},
+		{"a row of the entity's body", 2, "Cart › addItem"},
+		{"a row below a row of no entity", 4, "Cart › addItem"},
+		{"the next entity's header", 5, "total"},
+		{"a row of no entity", 3, ""},
+		{"a file header", 0, ""},
+		{"an entity of the same id in another file, whose header we don't have", 6, ""},
+		{"past the end", 7, ""},
+		{"before the start", -1, ""},
+	}
+
+	for _, s := range scenarios {
+		t.Run(s.name, func(t *testing.T) {
+			assert.Equal(t, s.expected, entityBreadcrumbAt(metadata, s.bufferLine))
+		})
+	}
+}
+
 func TestRenderingStatesDiffLines(t *testing.T) {
 	row := func(text string, records ...string) gocui.DiffLineContent {
 		return gocui.DiffLineContent{Text: text, Metadata: records}

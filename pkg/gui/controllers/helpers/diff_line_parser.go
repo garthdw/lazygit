@@ -212,6 +212,60 @@ func parseEntityMetadata(payload string) (entityRecord, bool) {
 	return entityRecord{id: id, unit: unit, path: fields[4]}, true
 }
 
+// breadcrumbRecord is what a 'b' record states.
+type breadcrumbRecord struct {
+	id         string
+	breadcrumb string
+	path       string
+}
+
+// parseBreadcrumbMetadata parses the payload of a 'b' record, in which a diff renderer
+// states how to name an entity, on the row that heads it:
+//
+//	1;b;entity-id;breadcrumb;file
+//
+// The breadcrumb is the chain of names leading to the entity, such as "Cart › addItem".
+// It is stated rather than taken from the id because a name may contain the id's
+// separator. Both are percent-encoded, since they may contain ';'.
+func parseBreadcrumbMetadata(payload string) (breadcrumbRecord, bool) {
+	fields := strings.SplitN(payload, ";", 5)
+	if len(fields) < 5 || fields[0] != "1" || fields[1] != "b" || fields[2] == "" || fields[3] == "" {
+		return breadcrumbRecord{}, false
+	}
+	id, idErr := url.PathUnescape(fields[2])
+	breadcrumb, breadcrumbErr := url.PathUnescape(fields[3])
+	if idErr != nil || breadcrumbErr != nil {
+		return breadcrumbRecord{}, false
+	}
+	return breadcrumbRecord{id: id, breadcrumb: breadcrumb, path: fields[4]}, true
+}
+
+// entityBreadcrumbAt names the entity the given buffer line belongs to, by its 's'
+// record, with the breadcrumb of the 'b' record on the row heading that entity, which
+// is at or above it. It is empty for a row of no entity, or of one with no breadcrumb.
+func entityBreadcrumbAt(metadata [][]string, bufferLine int) string {
+	if bufferLine < 0 || bufferLine >= len(metadata) {
+		return ""
+	}
+	var entity entityRecord
+	for _, record := range metadata[bufferLine] {
+		if parsed, ok := parseEntityMetadata(record); ok {
+			entity = parsed
+		}
+	}
+	if entity.id == "" {
+		return ""
+	}
+	for line := bufferLine; line >= 0; line-- {
+		for _, record := range metadata[line] {
+			if parsed, ok := parseBreadcrumbMetadata(record); ok && parsed.id == entity.id && parsed.path == entity.path {
+				return parsed.breadcrumb
+			}
+		}
+	}
+	return ""
+}
+
 // parseDiffLineIdentities recovers, for every row of a rendering, the diff lines it
 // shows, indexed 1:1 with contents; a row that shows none we can place gets an empty
 // entry. The rendering is read the way renderingStatesDiffLines settles: by the

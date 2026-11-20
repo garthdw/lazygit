@@ -44,6 +44,16 @@ func (self *DiffLineHelper) GetDiffLineInfo(view *gocui.View, viewLineIdx int) (
 	return identities[0], true
 }
 
+// EntityBreadcrumb names the entity of the row under view's cursor, as the diff
+// renderer states it (see entityBreadcrumbAt); empty where it states none.
+func (self *DiffLineHelper) EntityBreadcrumb(view *gocui.View) string {
+	bufferLine, ok := view.BufferLineForViewLine(view.SelectedLineIdx())
+	if !ok {
+		return ""
+	}
+	return entityBreadcrumbAt(view.DiffLineMetadata(), bufferLine)
+}
+
 // diffLineIdentitiesAt recovers every diff line the row at the given (wrapped) view
 // line shows, left to right. It is GetDiffLineInfo's form for a reader that can't
 // settle for the line the row leads with: an end of a selection covers its whole

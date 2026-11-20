@@ -24,6 +24,9 @@ type MainContext struct {
 	// types.ContentIsDiff). It is known as the render is asked for, well before there
 	// is any content to look at.
 	contentIsDiff bool
+	// paneTitle is the title the last render gave the pane, which the view's title adds
+	// the entity under the cursor to while the pane is focused.
+	paneTitle string
 }
 
 var (
@@ -81,6 +84,17 @@ func (self *MainContext) ContentIsDiff() bool {
 // SetContentIsDiff records what kind of render the pane is being given.
 func (self *MainContext) SetContentIsDiff(value bool) {
 	self.contentIsDiff = value
+}
+
+// PaneTitle returns the title the last render gave the pane (see paneTitle); empty
+// before any render named it.
+func (self *MainContext) PaneTitle() string {
+	return self.paneTitle
+}
+
+// SetPaneTitle records the title a render gives the pane.
+func (self *MainContext) SetPaneTitle(title string) {
+	self.paneTitle = title
 }
 
 func NewMainContext(
