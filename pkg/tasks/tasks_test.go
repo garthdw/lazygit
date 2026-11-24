@@ -1324,3 +1324,64 @@ func TestSameContentLetsTheRunningTaskPaintFirst(t *testing.T) {
 
 	assert.Equal(t, int32(2), paints.Load())
 }
+
+// A task asked for to render different content marks it as new before it stops the
+// task the view is running. If that task paints in between, its paint is of other
+// content than the one marked, and leaves the mark, and the scroll reset it owes,
+// to the new task.
+func TestLatePaintOfAReplacedTaskLeavesTheNewContentPending(t *testing.T) {
+	resetOrigin, getResetOriginCallCount := getCounter()
+	manager := NewViewBufferManager(
+		utils.NewDummyLog(),
+		bytes.NewBuffer(nil),
+		func() {},
+		func() {},
+		func() {},
+		resetOrigin,
+		func() {},
+		func() {},
+		func() gocui.Task { return gocui.NewFakeTask() },
+		// no UI thread in the test; run the view mutations inline
+		func(f func()) error { f(); return nil },
+	)
+
+	startTask := func(key string, reader io.Reader, onDone func()) {
+		start := func() (Cmd, io.Reader) {
+			// not actually starting this because it's not necessary
+			return ExecCmd{Cmd: exec.Command("blah")}, reader
+		}
+		// The first-paint point is far beyond what any of these readers yield, so
+		// only reaching EOF paints.
+		_ = manager.NewTask(manager.NewCmdTask(start, nil, LinesToRead{Total: 100, InitialRefreshAfter: 50}, onDone), key)
+	}
+
+	running := BlockingLineReader{
+		linesToYield: 3,
+		blocked:      make(chan struct{}),
+		unblock:      make(chan struct{}),
+	}
+	runningDone := make(chan struct{})
+	startTask("cmd1", &running, func() { close(runningDone) })
+	<-running.blocked
+
+	// Hold the new task between marking its content as new and stopping the
+	// running one, and let the running one paint there.
+	manager.waitingMutex.Lock()
+	done := make(chan struct{})
+	startTask("cmd2", &BlankLineReader{totalLinesToYield: 3}, func() { close(done) })
+	assert.Eventually(t, func() bool {
+		manager.taskIDMutex.Lock()
+		defer manager.taskIDMutex.Unlock()
+		return manager.taskKey == "cmd2"
+	}, time.Second, time.Millisecond)
+	close(running.unblock)
+	<-runningDone
+	resetsBeforeTheNewTask := getResetOriginCallCount()
+
+	manager.waitingMutex.Unlock()
+	<-done
+	/* EXPECTED:
+	assert.Equal(t, 1, getResetOriginCallCount()-resetsBeforeTheNewTask)
+	ACTUAL: */
+	assert.Equal(t, 0, getResetOriginCallCount()-resetsBeforeTheNewTask)
+}
