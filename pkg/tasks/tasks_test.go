@@ -297,12 +297,10 @@ func TestNewCmdTaskQueuedReadAtEndOfInput(t *testing.T) {
 }
 
 // A task rendering content the view wasn't already showing resets the scroll
-// position to the top, at its first paint. If it is stopped and replaced before
-// it ever paints — a background refresh landing just after the user clicked a
-// different item, say — the replacement renders the same content and so decides
-// on no reset of its own; it has to perform the one the stopped task was owed,
-// or the view keeps the scroll position of the content it showed before.
-func TestResetOriginSurvivesTaskReplacement(t *testing.T) {
+// position to the top, at its first paint. A re-render of the same content asked
+// for before then — a background refresh landing just after the user clicked a
+// different item, say — lets it paint first, so the reset is done, and only once.
+func TestResetOriginOnceForSameContentAskedForBeforeThePaint(t *testing.T) {
 	resetOrigin, getResetOriginCallCount := getCounter()
 
 	manager := NewViewBufferManager(
@@ -344,13 +342,13 @@ func TestResetOriginSurvivesTaskReplacement(t *testing.T) {
 		blocked:      make(chan struct{}),
 		unblock:      make(chan struct{}),
 	}
-	defer close(stalled.unblock)
 	startTask("cmd2", &stalled, nil)
 	<-stalled.blocked
 
-	// The replacement shows the same content as the stalled task, so it has no
-	// reset of its own to do — but it must still do that task's.
-	runTaskToCompletion("cmd2")
+	done := make(chan struct{})
+	startTask("cmd2", &BlankLineReader{totalLinesToYield: 3}, func() { close(done) })
+	close(stalled.unblock)
+	<-done
 	assert.Equal(t, 2, getResetOriginCallCount())
 }
 
@@ -528,11 +526,10 @@ func TestNewCmdTaskRestoreThatFindsNothing(t *testing.T) {
 	assert.Equal(t, 1, getResetOriginCallCount(), "new content the restore couldn't place starts at the top")
 }
 
-// The task a restore was installed for can be stopped and replaced before it ever
-// paints — a background refresh landing right after the key was pressed. The
-// replacement renders the same content, so it is the one that owes the user their
-// position.
-func TestRestoreSurvivesTaskReplacement(t *testing.T) {
+// A re-render of the same content can be asked for before the task a restore was
+// installed for paints — a background refresh landing right after the key was
+// pressed. It lets that task paint first, so the restore is applied, and only once.
+func TestRestoreAppliedOnceForSameContentAskedForBeforeThePaint(t *testing.T) {
 	var applyCount atomic.Int32
 
 	manager := NewViewBufferManager(
@@ -571,15 +568,15 @@ func TestRestoreSurvivesTaskReplacement(t *testing.T) {
 		blocked:      make(chan struct{}),
 		unblock:      make(chan struct{}),
 	}
-	defer close(stalled.unblock)
 	startTask(&stalled, nil)
 	<-stalled.blocked
 
 	done := make(chan struct{})
 	startTask(&BlankLineReader{totalLinesToYield: 3}, func() { close(done) })
+	close(stalled.unblock)
 	<-done
 
-	assert.EqualValues(t, 1, applyCount.Load(), "the replacement should apply the restore the stopped task couldn't")
+	assert.EqualValues(t, 1, applyCount.Load())
 }
 
 // A task told to keep the scroll position renders the content the view is showing
@@ -1325,8 +1322,5 @@ func TestSameContentLetsTheRunningTaskPaintFirst(t *testing.T) {
 	close(slow.unblock)
 	<-done
 
-	/* EXPECTED:
 	assert.Equal(t, int32(2), paints.Load())
-	ACTUAL: */
-	assert.Equal(t, int32(1), paints.Load())
 }
