@@ -1380,8 +1380,5 @@ func TestLatePaintOfAReplacedTaskLeavesTheNewContentPending(t *testing.T) {
 
 	manager.waitingMutex.Unlock()
 	<-done
-	/* EXPECTED:
 	assert.Equal(t, 1, getResetOriginCallCount()-resetsBeforeTheNewTask)
-	ACTUAL: */
-	assert.Equal(t, 0, getResetOriginCallCount()-resetsBeforeTheNewTask)
 }

@@ -91,16 +91,19 @@ type ViewBufferManager struct {
 	// before the new content replaces it. See newContentPending.
 	resetOrigin func()
 
-	// Whether the content the running task is rendering differs from what the
-	// view is currently showing (i.e. the command key changed). Two things key
-	// off it: the loading indicator only takes the view over when it is set,
-	// since there is no point clearing content we are about to render
-	// identically; and the first paint that reveals the content resets the
-	// scroll to the top and clears it.
+	// The key of the content the view is to show next when it differs from what
+	// the view is currently showing (i.e. the command key changed), nil when it
+	// doesn't. Two things key off it: the loading indicator only takes the view
+	// over for the content it names, since there is no point clearing content we
+	// are about to render identically; and the first paint of that content resets
+	// the scroll to the top and clears it.
 	//
-	// It is cleared by the first paint of the content. A re-render of the same
-	// content asked for before then waits for that paint (see NewReservedTask).
-	newContentPending atomic.Bool
+	// It names the content rather than the task, because the task it is set for
+	// stops the running one only after setting it, and the running one may paint
+	// its own content in between. A re-render of the same content asked for
+	// before the paint waits for it (see NewReservedTask). Guarded by
+	// taskIDMutex, like the task key.
+	newContentPending *string
 
 	// When set, the next command task puts the view back where it was once it has
 	// re-rendered the content, instead of showing the new render from the top (see
@@ -393,7 +396,30 @@ func (self *ViewBufferManager) IsLoading() bool {
 // rendering, being different from what it showed before. Until the first paint the
 // view shows the previous content, or "loading..." once that takes a while.
 func (self *ViewBufferManager) HasNewContentPending() bool {
-	return self.newContentPending.Load()
+	self.taskIDMutex.Lock()
+	defer self.taskIDMutex.Unlock()
+
+	return self.newContentPending != nil
+}
+
+func (self *ViewBufferManager) isNewContentPending(key string) bool {
+	self.taskIDMutex.Lock()
+	defer self.taskIDMutex.Unlock()
+
+	return self.newContentPending != nil && *self.newContentPending == key
+}
+
+// takeNewContentPending clears the mark if it is for the given content, and
+// reports whether it was.
+func (self *ViewBufferManager) takeNewContentPending(key string) bool {
+	self.taskIDMutex.Lock()
+	defer self.taskIDMutex.Unlock()
+
+	if self.newContentPending == nil || *self.newContentPending != key {
+		return false
+	}
+	self.newContentPending = nil
+	return true
 }
 
 // HasUnreadLines reports whether the task asked for last has stopped reading
@@ -533,7 +559,7 @@ func (self *ViewBufferManager) NewCmdTask(start func() (Cmd, io.Reader), prefix 
 		// newContentPending), and content the view is showing is shown where the
 		// view is.
 		initialRequest := linesToRead
-		if !self.newContentPending.Load() {
+		if !self.isNewContentPending(opts.key) {
 			initialRequest = linesToRead.includingLinesAboveView()
 		}
 
@@ -657,7 +683,7 @@ func (self *ViewBufferManager) NewCmdTask(start func() (Cmd, io.Reader), prefix 
 				// the user is looking at seamless, and blanking the view for a message
 				// before putting them back where they were is the flicker it exists to
 				// avoid.
-				if !loaded && restore == nil && self.newContentPending.Load() {
+				if !loaded && restore == nil && self.isNewContentPending(opts.key) {
 					self.beforeStart()
 					// beforeStart cleared the previous content to show "loading...", so
 					// put the view back at the top for it (beforeStart doesn't touch the
@@ -713,7 +739,7 @@ func (self *ViewBufferManager) NewCmdTask(start func() (Cmd, io.Reader), prefix 
 				// put the view from where it is. The position the paint settles on is the
 				// restore's to move from, so it has to be the one the new content is
 				// about to be revealed at.
-				if self.newContentPending.Swap(false) {
+				if self.takeNewContentPending(opts.key) {
 					self.resetOrigin()
 				}
 				if restore != nil {
@@ -970,6 +996,9 @@ type TaskOpts struct {
 	// The task's place in the order of the view's tasks (see ReserveTask).
 	taskID int
 
+	// The key of the content the task renders (see newContentPending).
+	key string
+
 	// Tells that the task has painted its content, so a re-render of the same
 	// content may take over (see NewReservedTask).
 	painted func()
@@ -1062,7 +1091,7 @@ func (self *ViewBufferManager) NewReservedTask(reservation TaskReservation, f fu
 		// come back looking much the same.
 		sameContent := self.taskKey == key
 		if !sameContent && self.resetOrigin != nil && !self.keepScrollForNextTask {
-			self.newContentPending.Store(true)
+			self.newContentPending = &key
 		}
 		self.keepScrollForNextTask = false
 		self.taskKey = key
@@ -1123,7 +1152,7 @@ func (self *ViewBufferManager) NewReservedTask(reservation TaskReservation, f fu
 
 		self.waitingMutex.Unlock()
 
-		if err := f(TaskOpts{Stop: stop, InitialContentLoaded: completeGocuiTask, taskID: taskID, painted: onPainted}); err != nil {
+		if err := f(TaskOpts{Stop: stop, InitialContentLoaded: completeGocuiTask, taskID: taskID, key: key, painted: onPainted}); err != nil {
 			self.Log.Error(err) // might need an onError callback
 		}
 		onPainted()
