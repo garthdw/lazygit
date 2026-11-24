@@ -58,9 +58,9 @@ type WindowArrangementArgs struct {
 	// Returns the number of content lines of the view currently shown in the given
 	// window. Used by the shrink-to-content feature to size a panel to its content.
 	ContentHeightForWindow func(window string) int
-	// Reports whether the view shown in the given window is still reading its
-	// content in, which it does only as far as the view is tall.
-	IsLoadingWindow func(window string) bool
+	// Reports whether the view shown in the given window has stopped reading its
+	// content short of the end, which it reads only as far as the view is tall.
+	HasUnreadLinesForWindow func(window string) bool
 	// Whether the main panel is split (as is the case e.g. when a file has both
 	// staged and unstaged changes)
 	MainPanes types.MainPanes
@@ -106,10 +106,10 @@ func (self *WindowArrangementHelper) GetWindowDimensions(informationStr string, 
 		ContentHeightForWindow: func(window string) int {
 			return self.windowHelper.GetContextForWindow(window).TotalContentHeight()
 		},
-		IsLoadingWindow: func(window string) bool {
+		HasUnreadLinesForWindow: func(window string) bool {
 			view := self.windowHelper.GetContextForWindow(window).GetView()
 			manager := self.c.GetViewBufferManagerForView(view)
-			return manager != nil && manager.IsLoading()
+			return manager != nil && manager.HasUnreadLines()
 		},
 		MainPanes:        repoState.GetMainPanes(),
 		ScreenMode:       repoState.GetScreenMode(),
@@ -227,7 +227,7 @@ func MergeMaps[K comparable, V any](maps ...map[K]V) map[K]V {
 // mainSectionChildren lays out the main panes in a section of the given height. Stacked,
 // the secondary pane (the staged changes beside the unstaged) is only as tall as what it
 // shows, up to half the section, so a small staged change leaves the rest to the other.
-// While its content is still being read in it keeps its half: a view reads only as many
+// While lines of its content are left unread it keeps its half: a view reads only as many
 // lines as it is tall, so a pane sized to them would never read more.
 func mainSectionChildren(args WindowArrangementArgs, height int) []*boxlayout.Box {
 	mainPane := &boxlayout.Box{Window: "main", Weight: 1}
@@ -262,7 +262,7 @@ func fittedSecondaryPaneHeight(args WindowArrangementArgs, height int) (int, boo
 	const frameSize = 2
 
 	if splitMainPanelSideBySide(args) || args.ContentHeightForWindow == nil ||
-		args.IsLoadingWindow == nil || args.IsLoadingWindow("secondary") {
+		args.HasUnreadLinesForWindow == nil || args.HasUnreadLinesForWindow("secondary") {
 		return 0, false
 	}
 	fitted := max(args.ContentHeightForWindow("secondary"), 1) + frameSize
