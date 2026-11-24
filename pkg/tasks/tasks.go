@@ -63,6 +63,12 @@ type ViewBufferManager struct {
 	writer io.Writer
 
 	waitingMutex deadlock.Mutex
+	// Closed once the task stopCurrentTask stops has painted its content, or has
+	// ended without. Guarded by waitingMutex, like stopCurrentTask.
+	currentTaskPainted chan struct{}
+	// Closed when the next task after the last one reserved is asked for (see
+	// TaskReservation.superseded). Guarded by taskIDMutex.
+	nextTaskAskedFor chan struct{}
 	// Guards newTaskID and taskKey, which identify the most recently requested
 	// task. newTaskID is written wherever a task is asked for (ReserveTask) and
 	// read on the goroutine NewReservedTask spawns. taskKey is written on that
@@ -92,22 +98,19 @@ type ViewBufferManager struct {
 	// identically; and the first paint that reveals the content resets the
 	// scroll to the top and clears it.
 	//
-	// It deliberately outlives the task that set it: a task can be stopped and
-	// replaced before it ever paints — a background refresh landing just after
-	// the user clicked a different item, say — and the replacement, which
-	// renders the same content and so sets nothing of its own, still has to do
-	// what that task was owed.
+	// It is cleared by the first paint of the content. A re-render of the same
+	// content asked for before then waits for that paint (see NewReservedTask).
 	newContentPending atomic.Bool
 
 	// When set, the next command task puts the view back where it was once it has
 	// re-rendered the content, instead of showing the new render from the top (see
 	// RenderRestore). It is installed just before the re-render is triggered.
 	//
-	// Like newContentPending it outlives the task it was installed for, and for the
-	// same reason: that task can be stopped and replaced before it ever paints, and
-	// the replacement, rendering the same content, is then the one that owes the
-	// user their position. It is cleared by whichever task applies it. Guarded by
-	// taskIDMutex, like the task key.
+	// It outlives the task it was installed for: that task can be superseded
+	// before it is created (see ReserveTask), by a background refresh landing
+	// during the layout, say, and the one replacing it, rendering the same
+	// content, is then the one that owes the user their position. It is cleared
+	// by whichever task applies it. Guarded by taskIDMutex, like the task key.
 	restoreForNextTask *RenderRestore
 
 	// When set, the next command task leaves the view's scroll position alone even
@@ -702,6 +705,9 @@ func (self *ViewBufferManager) NewCmdTask(start func() (Cmd, io.Reader), prefix 
 					return
 				}
 				painted = true
+				if opts.painted != nil {
+					defer opts.painted()
+				}
 				// Content the view hasn't seen is shown from the top, and this is where
 				// the view goes there — before the restore below, which decides where to
 				// put the view from where it is. The position the paint settles on is the
@@ -963,12 +969,18 @@ type TaskOpts struct {
 
 	// The task's place in the order of the view's tasks (see ReserveTask).
 	taskID int
+
+	// Tells that the task has painted its content, so a re-render of the same
+	// content may take over (see NewReservedTask).
+	painted func()
 }
 
 // A TaskReservation holds a task's place in the order of the view's tasks, from
 // when the task is asked for until it is created. See ReserveTask.
 type TaskReservation struct {
 	taskID int
+	// Closed when another task is asked for after this one.
+	superseded <-chan struct{}
 }
 
 // ReserveTask gives a task its place in the order of the view's tasks, for a task
@@ -982,7 +994,11 @@ func (self *ViewBufferManager) ReserveTask() TaskReservation {
 	self.newTaskID++
 	// Whoever asks for content to be read from now on is asking for this task's.
 	self.readRequests.hold()
-	return TaskReservation{taskID: self.newTaskID}
+	if self.nextTaskAskedFor != nil {
+		close(self.nextTaskAskedFor)
+	}
+	self.nextTaskAskedFor = make(chan struct{})
+	return TaskReservation{taskID: self.newTaskID, superseded: self.nextTaskAskedFor}
 }
 
 // IsSuperseded reports whether another task has been asked for since the
@@ -1044,7 +1060,8 @@ func (self *ViewBufferManager) NewReservedTask(reservation TaskReservation, f fu
 		// would take the user away from what they are reading — and the loading
 		// message, which the same flag governs, would blank content that is about to
 		// come back looking much the same.
-		if self.taskKey != key && self.resetOrigin != nil && !self.keepScrollForNextTask {
+		sameContent := self.taskKey == key
+		if !sameContent && self.resetOrigin != nil && !self.keepScrollForNextTask {
 			self.newContentPending.Store(true)
 		}
 		self.keepScrollForNextTask = false
@@ -1052,17 +1069,37 @@ func (self *ViewBufferManager) NewReservedTask(reservation TaskReservation, f fu
 
 		self.taskIDMutex.Unlock()
 
-		self.waitingMutex.Lock()
-
 		// Re-check staleness after acquiring waitingMutex: a newer task
 		// may have arrived while we were blocked here.
-		self.taskIDMutex.Lock()
-		if taskID < self.newTaskID {
-			self.waitingMutex.Unlock()
-			self.taskIDMutex.Unlock()
+		lockUnlessSuperseded := func() bool {
+			self.waitingMutex.Lock()
+			self.taskIDMutex.Lock()
+			defer self.taskIDMutex.Unlock()
+			if taskID < self.newTaskID {
+				self.waitingMutex.Unlock()
+				return false
+			}
+			return true
+		}
+		if !lockUnlessSuperseded() {
 			return
 		}
-		self.taskIDMutex.Unlock()
+
+		// The task rendering the same content is let paint before this one stops
+		// it: re-renders that come faster than it renders would otherwise stop
+		// each one before it shows anything. A task for anything else doesn't
+		// wait, and neither does this one once another is asked for after it.
+		if painted := self.currentTaskPainted; sameContent && painted != nil {
+			self.waitingMutex.Unlock()
+			select {
+			case <-painted:
+			case <-reservation.superseded:
+				return
+			}
+			if !lockUnlessSuperseded() {
+				return
+			}
+		}
 
 		if self.stopCurrentTask != nil {
 			self.stopCurrentTask()
@@ -1079,11 +1116,17 @@ func (self *ViewBufferManager) NewReservedTask(reservation TaskReservation, f fu
 
 		self.stopCurrentTask = func() { once.Do(onStop) }
 
+		painted := make(chan struct{})
+		var paintedOnce sync.Once
+		onPainted := func() { paintedOnce.Do(func() { close(painted) }) }
+		self.currentTaskPainted = painted
+
 		self.waitingMutex.Unlock()
 
-		if err := f(TaskOpts{Stop: stop, InitialContentLoaded: completeGocuiTask, taskID: taskID}); err != nil {
+		if err := f(TaskOpts{Stop: stop, InitialContentLoaded: completeGocuiTask, taskID: taskID, painted: onPainted}); err != nil {
 			self.Log.Error(err) // might need an onError callback
 		}
+		onPainted()
 
 		// A task that reads no command's output, such as one showing a message, has
 		// given the view all of its content once it returns.
