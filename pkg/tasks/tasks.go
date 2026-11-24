@@ -386,6 +386,13 @@ func (self *ViewBufferManager) IsLoading() bool {
 	return self.loadingTaskID != 0 && self.loadingTaskID == self.newTaskID
 }
 
+// HasNewContentPending reports whether the view has yet to show the content it is
+// rendering, being different from what it showed before. Until the first paint the
+// view shows the previous content, or "loading..." once that takes a while.
+func (self *ViewBufferManager) HasNewContentPending() bool {
+	return self.newContentPending.Load()
+}
+
 // HasUnreadLines reports whether the task asked for last has stopped reading
 // before the end of its input, until it is asked for more lines. A view asks only
 // for as many lines as it is tall, so content that has stopped short of its end

@@ -1216,3 +1216,66 @@ func TestTaskStoppingShortOfItsInputLeavesLinesUnread(t *testing.T) {
 	assert.True(t, manager.IsLoading())
 	assert.False(t, manager.HasUnreadLines())
 }
+
+// Until the first paint of a render of different content, the view shows
+// something other than that content: what it showed before, or "loading...".
+// A re-render of the same content shows that content throughout.
+func TestNewContentIsPendingUntilItsFirstPaint(t *testing.T) {
+	manager := NewViewBufferManager(
+		utils.NewDummyLog(),
+		bytes.NewBuffer(nil),
+		func() {},
+		func() {},
+		func() {},
+		func() {},
+		func() {},
+		func() {},
+		func() gocui.Task { return gocui.NewFakeTask() },
+		// no UI thread in the test; run the view mutations inline
+		func(f func()) error { f(); return nil },
+	)
+
+	startTask := func(key string, reader io.Reader, onDone func()) {
+		start := func() (Cmd, io.Reader) {
+			// not actually starting this because it's not necessary
+			return ExecCmd{Cmd: exec.Command("blah")}, reader
+		}
+		// The first-paint point is far beyond what any of these readers yield, so
+		// only reaching EOF paints.
+		_ = manager.NewTask(manager.NewCmdTask(start, nil, LinesToRead{Total: 100, InitialRefreshAfter: 50}, onDone), key)
+	}
+	runTaskToCompletion := func(key string) {
+		done := make(chan struct{})
+		startTask(key, &BlankLineReader{totalLinesToYield: 3}, func() { close(done) })
+		<-done
+	}
+	// Returns a function that lets the stalled task run to completion.
+	stallTask := func(key string) func() {
+		stalled := BlockingLineReader{
+			linesToYield: 3,
+			blocked:      make(chan struct{}),
+			unblock:      make(chan struct{}),
+		}
+		done := make(chan struct{})
+		startTask(key, &stalled, func() { close(done) })
+		<-stalled.blocked
+		return func() {
+			close(stalled.unblock)
+			<-done
+		}
+	}
+
+	runTaskToCompletion("cmd1")
+	assert.False(t, manager.HasNewContentPending())
+
+	finish := stallTask("cmd1")
+	assert.False(t, manager.HasNewContentPending())
+	finish()
+
+	finish = stallTask("cmd2")
+	assert.True(t, manager.HasNewContentPending())
+	finish()
+
+	runTaskToCompletion("cmd2")
+	assert.False(t, manager.HasNewContentPending())
+}
