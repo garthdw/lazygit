@@ -1070,6 +1070,7 @@ func renderLayout(windows map[string]boxlayout.Dimensions) string {
 
 func TestStagedPaneFitsItsContent(t *testing.T) {
 	unread := false
+	pendingHeight := 0
 	layout := func(splitMode string, stagedRows int) (boxlayout.Dimensions, boxlayout.Dimensions) {
 		args := WindowArrangementArgs{
 			Width:                   120,
@@ -1080,6 +1081,7 @@ func TestStagedPaneFitsItsContent(t *testing.T) {
 			ActiveViewForWindow:     func(window string) string { return window },
 			ContentHeightForWindow:  contentHeights(map[string]int{"main": 200, "secondary": stagedRows}),
 			HasUnreadLinesForWindow: func(string) bool { return unread },
+			PendingHeightForWindow:  func(string) (int, bool) { return pendingHeight, pendingHeight > 0 },
 			MainPanes:               types.BothMainPanes,
 			ScreenMode:              types.SCREEN_NORMAL,
 		}
@@ -1103,6 +1105,18 @@ func TestStagedPaneFitsItsContent(t *testing.T) {
 	main, staged = layout("vertical", 3)
 	assert.LessOrEqual(t, height(main)-height(staged), 1, "half while rows are unread")
 	unread = false
+
+	// New content not shown yet: the pane keeps its height rather than fitting
+	// the one line of "loading...".
+	pendingHeight = 8
+	_, staged = layout("vertical", 1)
+	assert.Equal(t, 8, height(staged))
+
+	// A view that wasn't shown is as tall as the screen, so it takes its half.
+	pendingHeight = 50
+	main, staged = layout("vertical", 1)
+	assert.LessOrEqual(t, height(main)-height(staged), 1, "half for a pane appearing")
+	pendingHeight = 0
 
 	// Full screen with the staged pane focused: it alone takes the section.
 	args := WindowArrangementArgs{
