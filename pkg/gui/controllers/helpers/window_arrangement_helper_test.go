@@ -1069,19 +1069,21 @@ func renderLayout(windows map[string]boxlayout.Dimensions) string {
 }
 
 func TestStagedPaneFitsItsContent(t *testing.T) {
-	loading := false
+	unread := false
+	pendingHeight := 0
 	layout := func(splitMode string, stagedRows int) (boxlayout.Dimensions, boxlayout.Dimensions) {
 		args := WindowArrangementArgs{
-			Width:                  120,
-			Height:                 40,
-			UserConfig:             config.GetDefaultConfig(),
-			CurrentWindow:          "main",
-			CurrentSideWindow:      "files",
-			ActiveViewForWindow:    func(window string) string { return window },
-			ContentHeightForWindow: contentHeights(map[string]int{"main": 200, "secondary": stagedRows}),
-			IsLoadingWindow:        func(string) bool { return loading },
-			MainPanes:              types.BothMainPanes,
-			ScreenMode:             types.SCREEN_NORMAL,
+			Width:                   120,
+			Height:                  40,
+			UserConfig:              config.GetDefaultConfig(),
+			CurrentWindow:           "main",
+			CurrentSideWindow:       "files",
+			ActiveViewForWindow:     func(window string) string { return window },
+			ContentHeightForWindow:  contentHeights(map[string]int{"main": 200, "secondary": stagedRows}),
+			HasUnreadLinesForWindow: func(string) bool { return unread },
+			PendingHeightForWindow:  func(string) (int, bool) { return pendingHeight, pendingHeight > 0 },
+			MainPanes:               types.BothMainPanes,
+			ScreenMode:              types.SCREEN_NORMAL,
 		}
 		args.UserConfig.Gui.MainPanelSplitMode = splitMode
 		windows := GetWindowDimensions(args)
@@ -1097,25 +1099,37 @@ func TestStagedPaneFitsItsContent(t *testing.T) {
 	assert.LessOrEqual(t, height(main)-height(staged), 1, "never more than half")
 	assert.GreaterOrEqual(t, height(main)-height(staged), 0)
 
-	// Rows still being read in: only as many are read as the pane is tall, so
-	// sizing the pane to them would keep it at what it has read so far.
-	loading = true
+	// Rows left unread: only as many are read as the pane is tall, so sizing the
+	// pane to them would keep it at what it has read so far.
+	unread = true
 	main, staged = layout("vertical", 3)
-	assert.LessOrEqual(t, height(main)-height(staged), 1, "half while loading")
-	loading = false
+	assert.LessOrEqual(t, height(main)-height(staged), 1, "half while rows are unread")
+	unread = false
+
+	// New content not shown yet: the pane keeps its height rather than fitting
+	// the one line of "loading...".
+	pendingHeight = 8
+	_, staged = layout("vertical", 1)
+	assert.Equal(t, 8, height(staged))
+
+	// A view that wasn't shown is as tall as the screen, so it takes its half.
+	pendingHeight = 50
+	main, staged = layout("vertical", 1)
+	assert.LessOrEqual(t, height(main)-height(staged), 1, "half for a pane appearing")
+	pendingHeight = 0
 
 	// Full screen with the staged pane focused: it alone takes the section.
 	args := WindowArrangementArgs{
-		Width:                  120,
-		Height:                 40,
-		UserConfig:             config.GetDefaultConfig(),
-		CurrentWindow:          "secondary",
-		CurrentSideWindow:      "files",
-		ActiveViewForWindow:    func(window string) string { return window },
-		ContentHeightForWindow: contentHeights(map[string]int{"main": 200, "secondary": 3}),
-		IsLoadingWindow:        func(string) bool { return false },
-		MainPanes:              types.BothMainPanes,
-		ScreenMode:             types.SCREEN_FULL,
+		Width:                   120,
+		Height:                  40,
+		UserConfig:              config.GetDefaultConfig(),
+		CurrentWindow:           "secondary",
+		CurrentSideWindow:       "files",
+		ActiveViewForWindow:     func(window string) string { return window },
+		ContentHeightForWindow:  contentHeights(map[string]int{"main": 200, "secondary": 3}),
+		HasUnreadLinesForWindow: func(string) bool { return false },
+		MainPanes:               types.BothMainPanes,
+		ScreenMode:              types.SCREEN_FULL,
 	}
 	args.UserConfig.Gui.MainPanelSplitMode = "vertical"
 	assert.Greater(t, height(GetWindowDimensions(args)["secondary"]), 3+2)

@@ -124,6 +124,12 @@ type ViewBufferManager struct {
 	// over, whatever it shows. Guarded by taskIDMutex, like the task key.
 	loadingTaskID int
 
+	// The command task that has read all the lines asked of it while its input
+	// goes on, and waits to be asked for more. The view counts as having unread
+	// lines only while this task is still the one asked for last. Guarded by
+	// taskIDMutex, like the task key.
+	stoppedShortTaskID int
+
 	// beforeStart is the function that is called before starting a new task
 	beforeStart  func()
 	refreshView  func()
@@ -378,6 +384,35 @@ func (self *ViewBufferManager) IsLoading() bool {
 	defer self.taskIDMutex.Unlock()
 
 	return self.loadingTaskID != 0 && self.loadingTaskID == self.newTaskID
+}
+
+// HasNewContentPending reports whether the view has yet to show the content it is
+// rendering, being different from what it showed before. Until the first paint the
+// view shows the previous content, or "loading..." once that takes a while.
+func (self *ViewBufferManager) HasNewContentPending() bool {
+	return self.newContentPending.Load()
+}
+
+// HasUnreadLines reports whether the task asked for last has stopped reading
+// before the end of its input, until it is asked for more lines. A view asks only
+// for as many lines as it is tall, so content that has stopped short of its end
+// shows less than there is.
+func (self *ViewBufferManager) HasUnreadLines() bool {
+	self.taskIDMutex.Lock()
+	defer self.taskIDMutex.Unlock()
+
+	return self.stoppedShortTaskID != 0 && self.stoppedShortTaskID == self.newTaskID
+}
+
+func (self *ViewBufferManager) setStoppedShort(taskID int, stoppedShort bool) {
+	self.taskIDMutex.Lock()
+	defer self.taskIDMutex.Unlock()
+
+	if stoppedShort {
+		self.stoppedShortTaskID = taskID
+	} else if self.stoppedShortTaskID == taskID {
+		self.stoppedShortTaskID = 0
+	}
 }
 
 // StartLoading marks the view as loading the output of the task asked for last,
@@ -650,6 +685,9 @@ func (self *ViewBufferManager) NewCmdTask(start func() (Cmd, io.Reader), prefix 
 			// absolute target total (see LinesToRead.Total), so we compare against
 			// this to work out how many more lines, if any, we still need to read.
 			linesRead := 0
+			// Whether the task has read all it was asked for, short of the end of
+			// its input.
+			stoppedShort := false
 
 			// The first paint swaps the off-screen render in to reveal the new
 			// content, and settles the scroll position in the same step — so the new
@@ -717,6 +755,13 @@ func (self *ViewBufferManager) NewCmdTask(start func() (Cmd, io.Reader), prefix 
 					continue
 				}
 				{
+					readsOn := func() bool {
+						return linesToRead.Total == -1 || linesRead < linesToRead.Total || (restore != nil && !painted)
+					}
+					if readsOn() {
+						self.setStoppedShort(opts.taskID, false)
+						stoppedShort = false
+					}
 					callThen := func() {
 						if linesToRead.Then != nil {
 							linesToRead.Then()
@@ -737,7 +782,7 @@ func (self *ViewBufferManager) NewCmdTask(start func() (Cmd, io.Reader), prefix 
 					// that has to be parsed as a diff to be searched at all can only be
 					// parsed whole — so stopping early would leave it nothing to find,
 					// and the view somewhere the user didn't put it.
-					for linesToRead.Total == -1 || linesRead < linesToRead.Total || (restore != nil && !painted) {
+					for readsOn() {
 						if stopped() {
 							handOver()
 							break outer
@@ -823,6 +868,13 @@ func (self *ViewBufferManager) NewCmdTask(start func() (Cmd, io.Reader), prefix 
 								refreshViewIfStale()
 							}
 						}
+					}
+					if !stoppedShort {
+						// Set on the UI thread for the layout that follows to see: what
+						// is laid out to the content has to know there is more of it (see
+						// HasUnreadLines), and refreshing the view lays nothing out.
+						_ = self.onUIThread(func() { self.setStoppedShort(opts.taskID, true) })
+						stoppedShort = true
 					}
 					refreshViewIfStale()
 					onFirstPageShown()

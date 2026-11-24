@@ -33,23 +33,21 @@ func (gui *Gui) layout(g *gocui.Gui) error {
 
 	viewDimensions := gui.getWindowDimensions(informationStr, appStatus)
 
-	// reading more lines into main view buffers upon resize
-	prevMainView := gui.Views.Main
-	if prevMainView != nil {
-		prevMainHeight := prevMainView.Height()
-		newMainHeight := viewDimensions["main"].Y1 - viewDimensions["main"].Y0 + 1
-		if newMainHeight > prevMainHeight {
-			// The main views have grown taller, so make sure enough lines are
-			// loaded to fill them. The views haven't been resized yet at this
-			// point, so we can't rely on their current height; compute the target
-			// total from the new height instead. (Reading past the actual content
-			// is harmless: ReadLines stops at the end of input.)
-			linesToRead := prevMainView.OriginY() + newMainHeight
-			if manager := gui.getViewBufferManagerForView(gui.Views.Main); manager != nil {
-				manager.ReadLines(linesToRead)
-			}
-			if manager := gui.getViewBufferManagerForView(gui.Views.Secondary); manager != nil {
-				manager.ReadLines(linesToRead)
+	// Reading more lines into the main views' buffers as they grow. Each is read
+	// to its own height: stacked, one can grow while the other shrinks.
+	for window, view := range map[string]*gocui.View{"main": gui.Views.Main, "secondary": gui.Views.Secondary} {
+		dimensions, ok := viewDimensions[window]
+		if view == nil || !ok {
+			continue
+		}
+		newHeight := dimensions.Y1 - dimensions.Y0 + 1
+		if newHeight > view.Height() {
+			// The views haven't been resized yet at this point, so we can't rely
+			// on their current height; compute the target total from the new
+			// height instead. (Reading past the actual content is harmless:
+			// ReadLines stops at the end of input.)
+			if manager := gui.getViewBufferManagerForView(view); manager != nil {
+				manager.ReadLines(view.OriginY() + newHeight)
 			}
 		}
 	}
