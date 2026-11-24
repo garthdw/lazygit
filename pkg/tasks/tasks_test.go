@@ -1279,3 +1279,54 @@ func TestNewContentIsPendingUntilItsFirstPaint(t *testing.T) {
 	runTaskToCompletion("cmd2")
 	assert.False(t, manager.HasNewContentPending())
 }
+
+// A re-render of the content a task is still rendering lets that task paint
+// before taking over. A view whose content takes longer to render than the
+// re-renders come (a background refresh every second of a slow diff, say)
+// would otherwise never show it.
+func TestSameContentLetsTheRunningTaskPaintFirst(t *testing.T) {
+	var paints atomic.Int32
+	manager := NewViewBufferManager(
+		utils.NewDummyLog(),
+		bytes.NewBuffer(nil),
+		func() {},
+		func() {},
+		func() {},
+		func() {},
+		func() {},
+		func() { paints.Add(1) },
+		func() gocui.Task { return gocui.NewFakeTask() },
+		// no UI thread in the test; run the view mutations inline
+		func(f func()) error { f(); return nil },
+	)
+
+	startTask := func(reader io.Reader, onDone func()) {
+		start := func() (Cmd, io.Reader) {
+			// not actually starting this because it's not necessary
+			return ExecCmd{Cmd: exec.Command("blah")}, reader
+		}
+		// The first-paint point is far beyond what any of these readers yield, so
+		// only reaching EOF paints.
+		_ = manager.NewTask(manager.NewCmdTask(start, nil, LinesToRead{Total: 100, InitialRefreshAfter: 50}, onDone), "cmd")
+	}
+
+	slow := BlockingLineReader{
+		linesToYield: 3,
+		blocked:      make(chan struct{}),
+		unblock:      make(chan struct{}),
+	}
+	startTask(&slow, nil)
+	<-slow.blocked
+
+	done := make(chan struct{})
+	startTask(&BlankLineReader{totalLinesToYield: 3}, func() { close(done) })
+	// Time for the re-render to take over, if it doesn't wait for the paint.
+	time.Sleep(100 * time.Millisecond)
+	close(slow.unblock)
+	<-done
+
+	/* EXPECTED:
+	assert.Equal(t, int32(2), paints.Load())
+	ACTUAL: */
+	assert.Equal(t, int32(1), paints.Load())
+}
