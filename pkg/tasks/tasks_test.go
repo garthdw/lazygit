@@ -1166,3 +1166,53 @@ func TestEarlierTaskEndingLeavesALaterTaskLoading(t *testing.T) {
 	<-earlierDone
 	assert.True(t, manager.IsLoading())
 }
+
+// A task that has read the lines asked for while its input goes on leaves lines
+// unread until it is asked for more, and says so in an update of the UI, whose
+// layout pass then sees it.
+func TestTaskStoppingShortOfItsInputLeavesLinesUnread(t *testing.T) {
+	var manager *ViewBufferManager
+	layouts := make(chan bool, 10)
+	manager = NewViewBufferManager(
+		utils.NewDummyLog(),
+		bytes.NewBuffer(nil),
+		func() {},
+		func() {},
+		func() {},
+		func() {},
+		func() {},
+		func() {},
+		func() gocui.Task { return gocui.NewFakeTask() },
+		// no UI thread in the test; run the view mutations inline, and record what
+		// the layout pass after each update would see
+		func(f func()) error { f(); layouts <- manager.HasUnreadLines(); return nil },
+	)
+
+	reader := BlockingLineReader{
+		linesToYield: 10,
+		blocked:      make(chan struct{}),
+		unblock:      make(chan struct{}),
+	}
+	defer close(reader.unblock)
+	start := func() (Cmd, io.Reader) {
+		// not actually starting this because it's not necessary
+		return ExecCmd{Cmd: exec.Command("blah")}, &reader
+	}
+
+	reservation := manager.ReserveTask()
+	manager.StartLoading()
+	_ = manager.NewReservedTask(reservation, manager.NewCmdTask(start, nil, LinesToRead{Total: 3, InitialRefreshAfter: 3}, nil), "cmd")
+	for unread := false; !unread; {
+		select {
+		case unread = <-layouts:
+		case <-time.After(time.Second):
+			t.Fatal("no layout with lines left unread")
+		}
+	}
+
+	// Asked for more than there is, it reads on until its input ends.
+	manager.ReadLines(20)
+	<-reader.blocked
+	assert.True(t, manager.IsLoading())
+	assert.False(t, manager.HasUnreadLines())
+}
