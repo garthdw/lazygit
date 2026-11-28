@@ -47,6 +47,24 @@ func TestBlocksOfRows(t *testing.T) {
 	assert.Equal(t, []int{0, 0, 0, 0, -1, 1, 2, 2, 3, 2}, blocksOfRows(rows, true))
 }
 
+func TestBlocksOfRowsRunAcrossARowOfItsEntity(t *testing.T) {
+	row := func(lineType types.DiffLineType, entityID string) resolvedDiffLine {
+		return resolvedDiffLine{info: types.DiffLineInfo{Type: lineType, Path: "f", EntityID: entityID}, ok: true}
+	}
+	rows := []resolvedDiffLine{
+		row(types.DiffLineDeleted, "a"), // 0 a deleted entity's line
+		row(types.DiffLineContext, "a"), // 1 a member of it shown elsewhere
+		row(types.DiffLineDeleted, "a"), // 2 the rest of the entity
+		row(types.DiffLineContext, "b"), // 3 another entity's row...
+		row(types.DiffLineDeleted, "a"), // 4 ...ends the run
+		row(types.DiffLineDeleted, ""),  // 5 lines in no entity...
+		row(types.DiffLineContext, ""),  // 6 ...keep context
+		row(types.DiffLineDeleted, ""),  // 7 between their runs
+	}
+
+	assert.Equal(t, []int{0, 0, 0, -1, 1, 2, -1, 3}, blocksOfRows(rows, false))
+}
+
 func TestBlocksOfRowsHeaderBeforeUnchangedLines(t *testing.T) {
 	rows := []resolvedDiffLine{
 		{info: types.DiffLineInfo{Type: types.DiffLineSpan, Path: "f", EntityID: "a"}, ok: true},

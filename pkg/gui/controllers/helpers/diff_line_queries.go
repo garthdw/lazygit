@@ -582,9 +582,15 @@ func blocksOfRows(rows []resolvedDiffLine, byEntity bool) []int {
 			runs++
 			keys[i] = fmt.Sprintf("s%d", runs)
 		default:
-			previous := rows[max(i-1, 0)].info
-			if i == 0 || keys[i-1] == "" || keys[i-1][0] != 'r' ||
-				previous.Path != info.Path || previous.EntityID != info.EntityID {
+			// A context row of the entity (a member shown elsewhere) does not end its run.
+			before := i - 1
+			for info.EntityID != "" && before >= 0 && keys[before] == "" && rows[before].ok &&
+				rows[before].info.Type == types.DiffLineContext && rows[before].info.Unit == 0 &&
+				rows[before].info.Path == info.Path && rows[before].info.EntityID == info.EntityID {
+				before--
+			}
+			if before < 0 || keys[before] == "" || keys[before][0] != 'r' ||
+				rows[before].info.Path != info.Path || rows[before].info.EntityID != info.EntityID {
 				runs++
 			}
 			keys[i] = fmt.Sprintf("r%d", runs)
